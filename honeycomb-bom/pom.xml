@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+   <modelVersion>4.0.0</modelVersion>
+
+   <parent>
+      <groupId>io.github.jamoamo.honeycomb</groupId>
+      <artifactId>honeycomb-parent</artifactId>
+      <version>1.0.0-SNAPSHOT</version>
+      <relativePath>../pom.xml</relativePath>
+   </parent>
+
+   <artifactId>honeycomb-bom</artifactId>
+   <packaging>pom</packaging>
+
+   <name>Honeycomb BOM</name>
+   <description>Bill of Materials managing versions for all Honeycomb modules</description>
+
+   <properties>
+      <!-- Nothing to build, test or scan in a BOM aggregator -->
+      <maven.test.skip>true</maven.test.skip>
+      <checkstyle.skip>true</checkstyle.skip>
+      <jacoco.skip>true</jacoco.skip>
+   </properties>
+
+   <dependencyManagement>
+      <dependencies>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-boundary</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-exception</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-types</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+      </dependencies>
+   </dependencyManagement>
+</project>
