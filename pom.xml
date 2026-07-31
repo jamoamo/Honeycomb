@@ -18,6 +18,8 @@
       <module>honeycomb-exception</module>
       <module>honeycomb-types</module>
       <module>honeycomb-boundary</module>
+      <module>honeycomb-rest</module>
+      <module>honeycomb-rest-spring</module>
    </modules>
 
    <licenses>
@@ -42,6 +44,9 @@
 
       <!-- Dependency versions -->
       <slf4j.version>2.0.18</slf4j.version>
+      <jackson.version>3.0.0</jackson.version>
+      <spring.version>7.0.0</spring.version>
+      <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
       <junit.version>6.1.0</junit.version>
       <mockito.version>5.23.0</mockito.version>
       <assertj.version>3.27.7</assertj.version>
@@ -80,6 +85,16 @@
             <artifactId>honeycomb-boundary</artifactId>
             <version>${project.version}</version>
          </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-rest</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-rest-spring</artifactId>
+            <version>${project.version}</version>
+         </dependency>
 
          <!-- Third Party Dependencies -->
          <dependency>
@@ -92,8 +107,28 @@
             <artifactId>slf4j-simple</artifactId>
             <version>${slf4j.version}</version>
          </dependency>
+         <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+            <version>${spring.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>${jakarta.servlet.version}</version>
+         </dependency>
 
          <!-- Test Dependencies -->
+         <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <version>${spring.version}</version>
+         </dependency>
          <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
