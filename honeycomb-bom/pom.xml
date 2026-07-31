@@ -27,7 +27,7 @@
       <dependencies>
          <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>honeycomb-boundary</artifactId>
+            <artifactId>honeycomb-usecase</artifactId>
             <version>${project.version}</version>
          </dependency>
          <dependency>
@@ -42,12 +42,27 @@
          </dependency>
          <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-adapter</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>honeycomb-rest</artifactId>
             <version>${project.version}</version>
          </dependency>
          <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>honeycomb-rest-spring</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-messaging</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-nats</artifactId>
             <version>${project.version}</version>
          </dependency>
       </dependencies>

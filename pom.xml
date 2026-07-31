@@ -15,11 +15,8 @@
 
    <modules>
       <module>honeycomb-bom</module>
-      <module>honeycomb-exception</module>
-      <module>honeycomb-types</module>
-      <module>honeycomb-boundary</module>
-      <module>honeycomb-rest</module>
-      <module>honeycomb-rest-spring</module>
+      <module>core</module>
+      <module>ext</module>
    </modules>
 
    <licenses>
@@ -47,6 +44,7 @@
       <jackson.version>3.0.0</jackson.version>
       <spring.version>7.0.0</spring.version>
       <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
+      <jnats.version>2.26.0</jnats.version>
       <junit.version>6.1.0</junit.version>
       <mockito.version>5.23.0</mockito.version>
       <assertj.version>3.27.7</assertj.version>
@@ -82,7 +80,12 @@
          </dependency>
          <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>honeycomb-boundary</artifactId>
+            <artifactId>honeycomb-usecase</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-adapter</artifactId>
             <version>${project.version}</version>
          </dependency>
          <dependency>
@@ -93,6 +96,16 @@
          <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>honeycomb-rest-spring</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-messaging</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-nats</artifactId>
             <version>${project.version}</version>
          </dependency>
 
@@ -121,6 +134,11 @@
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
             <version>${jakarta.servlet.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>io.nats</groupId>
+            <artifactId>jnats</artifactId>
+            <version>${jnats.version}</version>
          </dependency>
 
          <!-- Test Dependencies -->
