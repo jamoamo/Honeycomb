@@ -10,11 +10,11 @@
       <relativePath>../pom.xml</relativePath>
    </parent>
 
-   <artifactId>honeycomb-rest</artifactId>
+   <artifactId>honeycomb-messaging</artifactId>
    <packaging>jar</packaging>
 
-   <name>Honeycomb Rest</name>
-   <description>Framework-free REST adapter contracts, routing and argument binding for incoming boundaries</description>
+   <name>Honeycomb Messaging</name>
+   <description>Broker-free message consumer adapter contracts, subject matching and argument binding for incoming boundaries</description>
 
    <dependencies>
       <dependency>

@@ -21,13 +21,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.github.jamoamo.honeycomb.rest.argument;
+package io.github.jamoamo.honeycomb.adapter.argument;
 
 /**
- * Converts the raw string value of a request parameter into the type expected by a handler method.
+ * Converts the raw string value of a bound parameter into the type expected by a handler method.
  *
  * <p>
- * This is the integration seam for value conversion: {@code honeycomb-rest} ships a lightweight default
+ * This is the integration seam for value conversion: {@code honeycomb-adapter} ships a lightweight default
  * implementation, and a richer implementation (for example one backed by Spring's conversion service) may be
  * supplied by the hosting module.
  * </p>
@@ -44,7 +44,7 @@ public interface ValueConverter
     * @param value      the raw string value
     * @param targetType the type to convert to
     * @return the converted value
-    * @throws io.github.jamoamo.honeycomb.rest.BadRequestException if the value cannot be converted
+    * @throws ValueConversionException if the value cannot be converted
     */
    Object convert(String value, Class<?> targetType);
 }

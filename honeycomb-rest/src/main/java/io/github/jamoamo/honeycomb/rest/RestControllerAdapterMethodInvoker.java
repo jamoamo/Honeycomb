@@ -23,13 +23,13 @@
  */
 package io.github.jamoamo.honeycomb.rest;
 
-import io.github.jamoamo.honeycomb.rest.argument.AdapterArgumentResolver;
+import io.github.jamoamo.honeycomb.adapter.argument.AdapterArgumentResolver;
+import io.github.jamoamo.honeycomb.adapter.argument.DefaultValueConverter;
+import io.github.jamoamo.honeycomb.adapter.argument.ValueConverter;
 import io.github.jamoamo.honeycomb.rest.argument.ArgumentResolutionContext;
-import io.github.jamoamo.honeycomb.rest.argument.DefaultValueConverter;
 import io.github.jamoamo.honeycomb.rest.argument.PathVariableArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.argument.QueryParamArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.argument.RequestBodyArgumentResolver;
-import io.github.jamoamo.honeycomb.rest.argument.ValueConverter;
 import io.github.jamoamo.honeycomb.rest.request.RestRequest;
 import io.github.jamoamo.honeycomb.rest.response.ApiResponse;
 
@@ -59,7 +59,7 @@ public final class RestControllerAdapterMethodInvoker
 {
    private static final Logger LOGGER = LoggerFactory.getLogger(RestControllerAdapterMethodInvoker.class);
 
-   private final List<AdapterArgumentResolver> argumentResolvers;
+   private final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers;
 
    /**
     * Constructor using the default argument resolvers.
@@ -77,7 +77,8 @@ public final class RestControllerAdapterMethodInvoker
     * @param argumentResolvers the ordered resolvers used to bind handler-method parameters; the first
     *        resolver that supports a parameter resolves it, so a catch-all body resolver should be last
     */
-   public RestControllerAdapterMethodInvoker(final List<AdapterArgumentResolver> argumentResolvers)
+   public RestControllerAdapterMethodInvoker(
+      final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers)
    {
       this.argumentResolvers = List.copyOf(argumentResolvers);
    }
@@ -132,7 +133,7 @@ public final class RestControllerAdapterMethodInvoker
    private Object resolveArgument(final Parameter parameter, final ArgumentResolutionContext context)
       throws IOException
    {
-      for (AdapterArgumentResolver resolver : argumentResolvers)
+      for (AdapterArgumentResolver<ArgumentResolutionContext> resolver : argumentResolvers)
       {
          if (resolver.supports(parameter))
          {
@@ -143,7 +144,8 @@ public final class RestControllerAdapterMethodInvoker
       throw new IllegalStateException("No argument resolver supports parameter " + parameter + ".");
    }
 
-   private static List<AdapterArgumentResolver> defaultResolvers(final ObjectMapper objectMapper)
+   private static List<AdapterArgumentResolver<ArgumentResolutionContext>> defaultResolvers(
+      final ObjectMapper objectMapper)
    {
       ValueConverter valueConverter = new DefaultValueConverter();
       return List.of(

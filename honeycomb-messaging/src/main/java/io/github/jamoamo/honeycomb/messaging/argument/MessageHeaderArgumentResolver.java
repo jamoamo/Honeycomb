@@ -21,12 +21,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.github.jamoamo.honeycomb.rest.argument;
+package io.github.jamoamo.honeycomb.messaging.argument;
 
 import io.github.jamoamo.honeycomb.adapter.argument.AdapterArgumentResolver;
 import io.github.jamoamo.honeycomb.adapter.argument.ValueConverter;
-import io.github.jamoamo.honeycomb.rest.BadRequestException;
-import io.github.jamoamo.honeycomb.rest.adapter.QueryParam;
+import io.github.jamoamo.honeycomb.messaging.MalformedMessageException;
+import io.github.jamoamo.honeycomb.messaging.adapter.MessageHeader;
 
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
@@ -36,19 +36,19 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Resolves a parameter annotated with {@link QueryParam} from the request query string.
+ * Resolves a parameter annotated with {@link MessageHeader} from the headers of the message being handled.
  *
  * <p>
- * A parameter typed as {@link Optional} yields an empty optional when the query parameter is absent, and a
- * parameter typed as {@link List} collects all values supplied for the name. For a plain-typed parameter the
- * declared {@link QueryParam#defaultValue()} is applied when the value is absent; a missing value for a
- * required parameter without a default results in a bad-request response.
+ * A parameter typed as {@link Optional} yields an empty optional when the header is absent, and a parameter
+ * typed as {@link List} collects all values supplied for the name. For a plain-typed parameter the declared
+ * {@link MessageHeader#defaultValue()} is applied when the value is absent; a missing value for a required
+ * parameter without a default makes the message unbindable.
  * </p>
  *
  * @author James Amoore
  * @since 1.0.0
  */
-public final class QueryParamArgumentResolver implements AdapterArgumentResolver<ArgumentResolutionContext>
+public final class MessageHeaderArgumentResolver implements AdapterArgumentResolver<MessageResolutionContext>
 {
    private final ValueConverter valueConverter;
 
@@ -57,9 +57,9 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
     *
     * @param valueConverter the converter used to coerce raw values to the parameter type
     */
-   public QueryParamArgumentResolver(final ValueConverter valueConverter)
+   public MessageHeaderArgumentResolver(final ValueConverter valueConverter)
    {
-      this.valueConverter = new BadRequestValueConverter(valueConverter);
+      this.valueConverter = new MalformedMessageValueConverter(valueConverter);
    }
 
    /**
@@ -68,16 +68,16 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
    @Override
    public boolean supports(final Parameter parameter)
    {
-      return parameter.isAnnotationPresent(QueryParam.class);
+      return parameter.isAnnotationPresent(MessageHeader.class);
    }
 
    /**
     * {@inheritDoc}
     */
    @Override
-   public Object resolve(final Parameter parameter, final ArgumentResolutionContext context)
+   public Object resolve(final Parameter parameter, final MessageResolutionContext context)
    {
-      QueryParam annotation = parameter.getAnnotation(QueryParam.class);
+      MessageHeader annotation = parameter.getAnnotation(MessageHeader.class);
       String name = annotation.value().isEmpty() ? parameter.getName() : annotation.value();
 
       if (parameter.getType() == Optional.class)
@@ -94,8 +94,8 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
 
    private Object resolveScalar(
       final Parameter parameter,
-      final QueryParam annotation,
-      final ArgumentResolutionContext context,
+      final MessageHeader annotation,
+      final MessageResolutionContext context,
       final String name)
    {
       String rawValue = singleValue(context, name);
@@ -116,7 +116,7 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
    }
 
    private Object resolveOptional(
-      final Parameter parameter, final ArgumentResolutionContext context, final String name)
+      final Parameter parameter, final MessageResolutionContext context, final String name)
    {
       String rawValue = singleValue(context, name);
       if (rawValue == null)
@@ -128,9 +128,9 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
    }
 
    private Object resolveList(
-      final Parameter parameter, final ArgumentResolutionContext context, final String name)
+      final Parameter parameter, final MessageResolutionContext context, final String name)
    {
-      List<String> rawValues = context.request().queryParameterValues(name);
+      List<String> rawValues = context.message().headerValues(name);
       List<Object> values = new ArrayList<>();
       Class<?> elementType = elementType(parameter);
       for (String rawValue : rawValues)
@@ -141,9 +141,9 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
       return values;
    }
 
-   private static String applyDefault(final QueryParam annotation, final String name)
+   private static String applyDefault(final MessageHeader annotation, final String name)
    {
-      if (!QueryParam.NO_DEFAULT.equals(annotation.defaultValue()))
+      if (!MessageHeader.NO_DEFAULT.equals(annotation.defaultValue()))
       {
          return annotation.defaultValue();
       }
@@ -155,21 +155,21 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
       return null;
    }
 
-   private static BadRequestException missingRequired(final String name)
+   private static MalformedMessageException missingRequired(final String name)
    {
-      return new BadRequestException("Missing required query parameter " + quotedName(name));
+      return new MalformedMessageException("Missing required message header " + quotedName(name));
    }
 
-   private static String singleValue(final ArgumentResolutionContext context, final String name)
+   private static String singleValue(final MessageResolutionContext context, final String name)
    {
-      List<String> values = context.request().queryParameterValues(name);
+      List<String> values = context.message().headerValues(name);
       if (values.isEmpty())
       {
          return null;
       }
       if (values.size() > 1)
       {
-         throw new BadRequestException("Multiple values supplied for query parameter " + quotedName(name));
+         throw new MalformedMessageException("Multiple values supplied for message header " + quotedName(name));
       }
 
       return values.get(0);

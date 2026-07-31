@@ -21,9 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.github.jamoamo.honeycomb.rest.argument;
-
-import io.github.jamoamo.honeycomb.rest.BadRequestException;
+package io.github.jamoamo.honeycomb.adapter.argument;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -82,11 +80,11 @@ public final class DefaultValueConverter implements ValueConverter
       }
       catch (final IllegalArgumentException ex)
       {
-         throw new BadRequestException(
+         throw new ValueConversionException(
             "Invalid value '" + value + "' for type " + targetType.getSimpleName(), ex);
       }
 
-      throw new BadRequestException("Unsupported parameter type: " + targetType.getName());
+      throw new ValueConversionException("Unsupported parameter type: " + targetType.getName());
    }
 
    private void register(final Class<?> type, final Function<String, Object> conversion)

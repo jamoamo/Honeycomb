@@ -21,59 +21,37 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.github.jamoamo.honeycomb.rest.argument;
+package io.github.jamoamo.honeycomb.messaging.argument;
 
 import io.github.jamoamo.honeycomb.adapter.argument.AdapterArgumentResolver;
-import io.github.jamoamo.honeycomb.adapter.argument.ValueConverter;
-import io.github.jamoamo.honeycomb.rest.BadRequestException;
-import io.github.jamoamo.honeycomb.rest.adapter.PathVariable;
+import io.github.jamoamo.honeycomb.messaging.message.ConsumedMessage;
 
 import java.lang.reflect.Parameter;
 
 /**
- * Resolves a parameter annotated with {@link PathVariable} from the variables captured during route matching.
+ * Resolves a parameter typed as {@link ConsumedMessage} to the message being handled, so that a handler
+ * needing the delivery attempt or the raw subject can ask for it.
  *
  * @author James Amoore
  * @since 1.0.0
  */
-public final class PathVariableArgumentResolver implements AdapterArgumentResolver<ArgumentResolutionContext>
+public final class ConsumedMessageArgumentResolver implements AdapterArgumentResolver<MessageResolutionContext>
 {
-   private final ValueConverter valueConverter;
-
-   /**
-    * Constructor.
-    *
-    * @param valueConverter the converter used to coerce the raw value to the parameter type
-    */
-   public PathVariableArgumentResolver(final ValueConverter valueConverter)
-   {
-      this.valueConverter = new BadRequestValueConverter(valueConverter);
-   }
-
    /**
     * {@inheritDoc}
     */
    @Override
    public boolean supports(final Parameter parameter)
    {
-      return parameter.isAnnotationPresent(PathVariable.class);
+      return parameter.getType() == ConsumedMessage.class;
    }
 
    /**
     * {@inheritDoc}
     */
    @Override
-   public Object resolve(final Parameter parameter, final ArgumentResolutionContext context)
+   public Object resolve(final Parameter parameter, final MessageResolutionContext context)
    {
-      PathVariable annotation = parameter.getAnnotation(PathVariable.class);
-      String name = annotation.value().isEmpty() ? parameter.getName() : annotation.value();
-
-      String rawValue = context.pathVariables().get(name);
-      if (rawValue == null)
-      {
-         throw new BadRequestException("Missing path variable '" + name + "'.");
-      }
-
-      return valueConverter.convert(rawValue, parameter.getType());
+      return context.message();
    }
 }

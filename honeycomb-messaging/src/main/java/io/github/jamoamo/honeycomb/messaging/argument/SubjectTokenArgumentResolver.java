@@ -21,41 +21,34 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.github.jamoamo.honeycomb.rest.argument;
+package io.github.jamoamo.honeycomb.messaging.argument;
 
 import io.github.jamoamo.honeycomb.adapter.argument.AdapterArgumentResolver;
-import io.github.jamoamo.honeycomb.rest.BadRequestException;
+import io.github.jamoamo.honeycomb.adapter.argument.ValueConverter;
+import io.github.jamoamo.honeycomb.messaging.MalformedMessageException;
+import io.github.jamoamo.honeycomb.messaging.adapter.SubjectToken;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
-
-import java.io.IOException;
 import java.lang.reflect.Parameter;
 
 /**
- * Resolves a parameter by deserializing the request body into its type. This is the fallback resolver: it
- * supports any parameter and is therefore expected to be consulted last, so that annotated parameters are
- * resolved by their dedicated resolvers first.
+ * Resolves a parameter annotated with {@link SubjectToken} from the tokens captured while matching the
+ * message subject.
  *
  * @author James Amoore
  * @since 1.0.0
  */
-public final class RequestBodyArgumentResolver implements AdapterArgumentResolver<ArgumentResolutionContext>
+public final class SubjectTokenArgumentResolver implements AdapterArgumentResolver<MessageResolutionContext>
 {
-   private static final Logger LOGGER = LoggerFactory.getLogger(RequestBodyArgumentResolver.class);
-
-   private final ObjectMapper objectMapper;
+   private final ValueConverter valueConverter;
 
    /**
     * Constructor.
     *
-    * @param objectMapper the object mapper used to deserialize the request body
+    * @param valueConverter the converter used to coerce the raw value to the parameter type
     */
-   public RequestBodyArgumentResolver(final ObjectMapper objectMapper)
+   public SubjectTokenArgumentResolver(final ValueConverter valueConverter)
    {
-      this.objectMapper = objectMapper;
+      this.valueConverter = new MalformedMessageValueConverter(valueConverter);
    }
 
    /**
@@ -64,23 +57,24 @@ public final class RequestBodyArgumentResolver implements AdapterArgumentResolve
    @Override
    public boolean supports(final Parameter parameter)
    {
-      return true;
+      return parameter.isAnnotationPresent(SubjectToken.class);
    }
 
    /**
     * {@inheritDoc}
     */
    @Override
-   public Object resolve(final Parameter parameter, final ArgumentResolutionContext context) throws IOException
+   public Object resolve(final Parameter parameter, final MessageResolutionContext context)
    {
-      try
+      SubjectToken annotation = parameter.getAnnotation(SubjectToken.class);
+      String name = annotation.value().isEmpty() ? parameter.getName() : annotation.value();
+
+      String rawValue = context.subjectTokens().get(name);
+      if (rawValue == null)
       {
-         return objectMapper.readValue(context.request().body(), parameter.getType());
+         throw new MalformedMessageException("Missing subject token '" + name + "'.");
       }
-      catch (final JacksonException ex)
-      {
-         LOGGER.warn("Failed to deserialize request body.", ex);
-         throw new BadRequestException("Malformed request body.", ex);
-      }
+
+      return valueConverter.convert(rawValue, parameter.getType());
    }
 }

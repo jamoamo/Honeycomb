@@ -23,6 +23,7 @@
  */
 package io.github.jamoamo.honeycomb.rest.argument;
 
+import io.github.jamoamo.honeycomb.adapter.argument.DefaultValueConverter;
 import io.github.jamoamo.honeycomb.rest.BadRequestException;
 import io.github.jamoamo.honeycomb.rest.FakeRestRequest;
 import io.github.jamoamo.honeycomb.rest.adapter.PathVariable;

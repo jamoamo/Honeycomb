@@ -21,10 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.github.jamoamo.honeycomb.rest.argument;
+package io.github.jamoamo.honeycomb.messaging.argument;
 
 import io.github.jamoamo.honeycomb.adapter.argument.AdapterArgumentResolver;
-import io.github.jamoamo.honeycomb.rest.BadRequestException;
+import io.github.jamoamo.honeycomb.messaging.MalformedMessageException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,25 +35,25 @@ import java.io.IOException;
 import java.lang.reflect.Parameter;
 
 /**
- * Resolves a parameter by deserializing the request body into its type. This is the fallback resolver: it
+ * Resolves a parameter by deserializing the message payload into its type. This is the fallback resolver: it
  * supports any parameter and is therefore expected to be consulted last, so that annotated parameters are
  * resolved by their dedicated resolvers first.
  *
  * @author James Amoore
  * @since 1.0.0
  */
-public final class RequestBodyArgumentResolver implements AdapterArgumentResolver<ArgumentResolutionContext>
+public final class MessagePayloadArgumentResolver implements AdapterArgumentResolver<MessageResolutionContext>
 {
-   private static final Logger LOGGER = LoggerFactory.getLogger(RequestBodyArgumentResolver.class);
+   private static final Logger LOGGER = LoggerFactory.getLogger(MessagePayloadArgumentResolver.class);
 
    private final ObjectMapper objectMapper;
 
    /**
     * Constructor.
     *
-    * @param objectMapper the object mapper used to deserialize the request body
+    * @param objectMapper the object mapper used to deserialize the message payload
     */
-   public RequestBodyArgumentResolver(final ObjectMapper objectMapper)
+   public MessagePayloadArgumentResolver(final ObjectMapper objectMapper)
    {
       this.objectMapper = objectMapper;
    }
@@ -71,16 +71,16 @@ public final class RequestBodyArgumentResolver implements AdapterArgumentResolve
     * {@inheritDoc}
     */
    @Override
-   public Object resolve(final Parameter parameter, final ArgumentResolutionContext context) throws IOException
+   public Object resolve(final Parameter parameter, final MessageResolutionContext context) throws IOException
    {
       try
       {
-         return objectMapper.readValue(context.request().body(), parameter.getType());
+         return objectMapper.readValue(context.message().payload(), parameter.getType());
       }
       catch (final JacksonException ex)
       {
-         LOGGER.warn("Failed to deserialize request body.", ex);
-         throw new BadRequestException("Malformed request body.", ex);
+         LOGGER.warn("Failed to deserialize message payload.", ex);
+         throw new MalformedMessageException("Malformed message payload.", ex);
       }
    }
 }

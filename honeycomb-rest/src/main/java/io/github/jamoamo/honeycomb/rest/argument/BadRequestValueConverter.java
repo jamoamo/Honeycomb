@@ -23,38 +23,44 @@
  */
 package io.github.jamoamo.honeycomb.rest.argument;
 
-import java.io.IOException;
-import java.lang.reflect.Parameter;
+import io.github.jamoamo.honeycomb.adapter.argument.ValueConversionException;
+import io.github.jamoamo.honeycomb.adapter.argument.ValueConverter;
+import io.github.jamoamo.honeycomb.rest.BadRequestException;
 
 /**
- * Resolves the value for a single handler-method parameter from the request.
- *
- * <p>
- * Resolvers are consulted in order; the first whose {@link #supports(Parameter)} returns {@code true} resolves
- * the parameter. This is the extension point through which new sources of request context (path variables,
- * query parameters, and so on) are added without modifying the invoker.
- * </p>
+ * Decorates a {@link ValueConverter} so that a protocol-neutral conversion failure surfaces as the REST
+ * failure for an unbindable request.
  *
  * @author James Amoore
  * @since 1.0.0
  */
-public interface AdapterArgumentResolver
+final class BadRequestValueConverter implements ValueConverter
 {
-   /**
-    * Indicates whether this resolver can resolve the given parameter.
-    *
-    * @param parameter the handler-method parameter
-    * @return {@code true} if this resolver handles the parameter
-    */
-   boolean supports(Parameter parameter);
+   private final ValueConverter delegate;
 
    /**
-    * Resolves the value for the given parameter.
+    * Constructor.
     *
-    * @param parameter the handler-method parameter
-    * @param context   the resolution context for the current request
-    * @return the resolved value
-    * @throws IOException if the request cannot be read
+    * @param delegate the converter performing the conversion
     */
-   Object resolve(Parameter parameter, ArgumentResolutionContext context) throws IOException;
+   BadRequestValueConverter(final ValueConverter delegate)
+   {
+      this.delegate = delegate;
+   }
+
+   /**
+    * {@inheritDoc}
+    */
+   @Override
+   public Object convert(final String value, final Class<?> targetType)
+   {
+      try
+      {
+         return delegate.convert(value, targetType);
+      }
+      catch (final ValueConversionException ex)
+      {
+         throw new BadRequestException(ex.getMessage(), ex);
+      }
+   }
 }

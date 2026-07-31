@@ -21,10 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.github.jamoamo.honeycomb.rest.argument;
-
-import io.github.jamoamo.honeycomb.rest.BadRequestException;
-import io.github.jamoamo.honeycomb.rest.HttpVerb;
+package io.github.jamoamo.honeycomb.adapter.argument;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +39,12 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 @DisplayName("DefaultValueConverter")
 public class DefaultValueConverterTest
 {
+   private enum Colour
+   {
+      RED,
+      GREEN
+   }
+
    private final DefaultValueConverter converter = new DefaultValueConverter();
 
    @Test
@@ -73,7 +76,7 @@ public class DefaultValueConverterTest
    @DisplayName("rejects a boolean value that is neither true nor false")
    public void testRejectsInvalidBoolean()
    {
-      assertThatExceptionOfType(BadRequestException.class)
+      assertThatExceptionOfType(ValueConversionException.class)
          .isThrownBy(() -> converter.convert("yes", boolean.class));
    }
 
@@ -90,15 +93,15 @@ public class DefaultValueConverterTest
    @DisplayName("converts enums by constant name")
    public void testConvertsEnums()
    {
-      assertThat(converter.convert("GET", HttpVerb.class)).isEqualTo(HttpVerb.GET);
+      assertThat(converter.convert("RED", Colour.class)).isEqualTo(Colour.RED);
    }
 
    @Test
    @DisplayName("rejects an unknown enum constant")
    public void testRejectsUnknownEnumConstant()
    {
-      assertThatExceptionOfType(BadRequestException.class)
-         .isThrownBy(() -> converter.convert("FETCH", HttpVerb.class))
+      assertThatExceptionOfType(ValueConversionException.class)
+         .isThrownBy(() -> converter.convert("BLUE", Colour.class))
          .withMessageContaining("Invalid value");
    }
 
@@ -106,7 +109,7 @@ public class DefaultValueConverterTest
    @DisplayName("rejects an unparseable number")
    public void testRejectsUnparseableNumber()
    {
-      assertThatExceptionOfType(BadRequestException.class)
+      assertThatExceptionOfType(ValueConversionException.class)
          .isThrownBy(() -> converter.convert("forty-two", int.class))
          .withMessageContaining("Invalid value");
    }
@@ -115,7 +118,7 @@ public class DefaultValueConverterTest
    @DisplayName("rejects unsupported target types")
    public void testRejectsUnsupportedType()
    {
-      assertThatExceptionOfType(BadRequestException.class)
+      assertThatExceptionOfType(ValueConversionException.class)
          .isThrownBy(() -> converter.convert("anything", Thread.class))
          .withMessageContaining("Unsupported parameter type");
    }
