@@ -24,7 +24,7 @@ A use case knows nothing about the adapter that called it and nothing about the 
 | `honeycomb-bom`        | Bill of materials for consumers                                                       |
 | `honeycomb-exception`  | `HoneycombException`, the base of every exception the libraries throw                 |
 | `honeycomb-types`      | `ErrorCode`, `ErrorCategory`                                                          |
-| `honeycomb-boundary`   | `UseCase`, `UseCaseResult`, `UseCaseException`, input validation                      |
+| `honeycomb-usecase`    | `UseCase`, `UseCaseResult`, `UseCaseException`, input validation                      |
 | `honeycomb-rest`       | REST adapter annotations, routing, argument binding, `ApiResponse`, `ProblemDetail`   |
 | `honeycomb-rest-spring`| Spring WebMVC (Spring Framework 7 / Boot 4) integration for the REST adapter model    |
 

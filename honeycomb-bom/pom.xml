@@ -27,7 +27,7 @@
       <dependencies>
          <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>honeycomb-boundary</artifactId>
+            <artifactId>honeycomb-usecase</artifactId>
             <version>${project.version}</version>
          </dependency>
          <dependency>

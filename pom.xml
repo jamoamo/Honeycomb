@@ -15,14 +15,8 @@
 
    <modules>
       <module>honeycomb-bom</module>
-      <module>honeycomb-exception</module>
-      <module>honeycomb-types</module>
-      <module>honeycomb-boundary</module>
-      <module>honeycomb-adapter</module>
-      <module>honeycomb-rest</module>
-      <module>honeycomb-rest-spring</module>
-      <module>honeycomb-messaging</module>
-      <module>honeycomb-nats</module>
+      <module>core</module>
+      <module>ext</module>
    </modules>
 
    <licenses>
@@ -86,7 +80,7 @@
          </dependency>
          <dependency>
             <groupId>${project.groupId}</groupId>
-            <artifactId>honeycomb-boundary</artifactId>
+            <artifactId>honeycomb-usecase</artifactId>
             <version>${project.version}</version>
          </dependency>
          <dependency>
