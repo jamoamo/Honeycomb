@@ -45,6 +45,7 @@
       <spring.version>7.0.0</spring.version>
       <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
       <jnats.version>2.26.0</jnats.version>
+      <telegrambots.version>10.1.1</telegrambots.version>
       <junit.version>6.1.0</junit.version>
       <mockito.version>5.23.0</mockito.version>
       <assertj.version>3.27.7</assertj.version>
@@ -108,6 +109,16 @@
             <artifactId>honeycomb-nats</artifactId>
             <version>${project.version}</version>
          </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-telegram</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-telegram-bots</artifactId>
+            <version>${project.version}</version>
+         </dependency>
 
          <!-- Third Party Dependencies -->
          <dependency>
@@ -139,6 +150,16 @@
             <groupId>io.nats</groupId>
             <artifactId>jnats</artifactId>
             <version>${jnats.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>org.telegram</groupId>
+            <artifactId>telegrambots-longpolling</artifactId>
+            <version>${telegrambots.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>org.telegram</groupId>
+            <artifactId>telegrambots-client</artifactId>
+            <version>${telegrambots.version}</version>
          </dependency>
 
          <!-- Test Dependencies -->

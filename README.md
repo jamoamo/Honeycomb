@@ -19,19 +19,26 @@ A use case knows nothing about the adapter that called it and nothing about the 
 
 ## Modules
 
-| Module                 | Contents                                                                             |
-|------------------------|---------------------------------------------------------------------------------------|
-| `honeycomb-bom`        | Bill of materials for consumers                                                       |
-| `honeycomb-exception`  | `HoneycombException`, the base of every exception the libraries throw                 |
-| `honeycomb-types`      | `ErrorCode`, `ErrorCategory`                                                          |
-| `honeycomb-usecase`    | `UseCase`, `UseCaseResult`, `UseCaseException`, input validation                      |
-| `honeycomb-rest`       | REST adapter annotations, routing, argument binding, `ApiResponse`, `ProblemDetail`   |
-| `honeycomb-rest-spring`| Spring WebMVC (Spring Framework 7 / Boot 4) integration for the REST adapter model    |
+| Module                    | Contents                                                                             |
+|---------------------------|---------------------------------------------------------------------------------------|
+| `honeycomb-bom`           | Bill of materials for consumers                                                       |
+| `honeycomb-exception`     | `HoneycombException`, the base of every exception the libraries throw                 |
+| `honeycomb-types`         | `ErrorCode`, `ErrorCategory`                                                          |
+| `honeycomb-usecase`       | `UseCase`, `UseCaseResult`, `UseCaseException`, input validation                      |
+| `honeycomb-adapter`       | `AdapterArgumentResolver`, `ValueConverter` — the argument-binding contracts every incoming adapter shares |
+| `honeycomb-rest`          | REST adapter annotations, routing, argument binding, `ApiResponse`, `ProblemDetail`   |
+| `honeycomb-rest-spring`   | Spring WebMVC (Spring Framework 7 / Boot 4) integration for the REST adapter model    |
+| `honeycomb-messaging`     | Broker-neutral message consumer adapter annotations, subject routing, argument binding, `MessageOutcome` |
+| `honeycomb-nats`          | NATS JetStream binding for the message consumer adapter model                        |
+| `honeycomb-telegram`      | Telegram bot adapter annotations, command routing, argument binding, `BotResponse`    |
+| `honeycomb-telegram-bots` | `telegrambots` long-polling binding for the Telegram bot adapter model                |
 
-The core libraries are framework free — `honeycomb-rest` reaches the HTTP runtime only through its own
-`RestRequest`/`PathTemplateParser` seams (its runtime dependencies are `slf4j-api` and Jackson 3 for body
-deserialization), and `honeycomb-rest-spring` is the adapter module that binds those seams to Spring WebMVC.
-Further framework integrations (AOP, Jakarta validation) will arrive as separate adapter modules.
+The core libraries are framework free — `honeycomb-rest` reaches the HTTP runtime, `honeycomb-messaging` reaches
+the broker, and `honeycomb-telegram` reaches the bot client only through their own seams (`RestRequest`,
+`ConsumedMessage`, `BotUpdate`), with `slf4j-api` and Jackson 3 (where a payload needs deserializing) as their
+only runtime dependencies. `honeycomb-rest-spring`, `honeycomb-nats` and `honeycomb-telegram-bots` are the
+adapter modules that bind those seams to Spring WebMVC, NATS JetStream and `telegrambots` respectively. Further
+framework integrations (AOP, Jakarta validation) will arrive as separate adapter modules.
 
 ## Writing a use case
 
@@ -126,6 +133,45 @@ public RestControllerAdapterHandlerAdapter handlerAdapter(final ObjectMapper obj
    return new RestControllerAdapterHandlerAdapter(new RestControllerAdapterMethodInvoker(objectMapper), objectMapper);
 }
 ```
+
+## Declaring a Telegram bot adapter
+
+An incoming Telegram boundary is a plain class annotated with `@TelegramBotAdapter`; its `@Command` methods
+handle a specific bot command and its `@OnUpdate` methods handle any other update of a given kind (plain
+messages, edited messages, callback queries). Handler methods bind command arguments, the chat id and the user
+id, call the use case, and return a `BotResponse` — or `void`, when no reply is needed.
+
+```java
+@TelegramBotAdapter
+public final class BookingBotAdapter
+{
+   private final BookSeatUseCase bookSeat;
+
+   public BookingBotAdapter(final BookSeatUseCase bookSeat)
+   {
+      this.bookSeat = bookSeat;
+   }
+
+   @Command("book")
+   public BotResponse book(@CommandArgument(index = 0) final int seat, @ChatId final long chatId)
+   {
+      return bookSeat.execute(new BookSeatInput(seat, chatId))
+         .fold(booking -> BotResponse.reply("Booked seat " + booking.seat() + "."),
+            failure -> BotResponse.reply("Sorry, that seat could not be booked."));
+   }
+}
+```
+
+To start the bot over long polling with `honeycomb-telegram-bots`, scan the adapters into a registry and
+register the bot's token:
+
+```java
+BotAdapterRegistry registry = new BotUpdateScanner().scanAll(adapterBeans);
+TelegramBotRegistrar registrar = new TelegramBotRegistrar(new TelegramBotAdapterMethodInvoker());
+registrar.register(botToken, registry);
+```
+
+`registrar.close()` stops long polling for every bot registered through it.
 
 ## Building
 

@@ -23,5 +23,6 @@
       <module>honeycomb-adapter</module>
       <module>honeycomb-rest</module>
       <module>honeycomb-messaging</module>
+      <module>honeycomb-telegram</module>
    </modules>
 </project>
