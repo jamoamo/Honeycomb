@@ -19,5 +19,6 @@
    <modules>
       <module>honeycomb-rest-spring</module>
       <module>honeycomb-nats</module>
+      <module>honeycomb-telegram-bots</module>
    </modules>
 </project>
