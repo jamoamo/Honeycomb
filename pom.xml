@@ -46,6 +46,7 @@
       <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
       <jnats.version>2.26.0</jnats.version>
       <telegrambots.version>10.1.1</telegrambots.version>
+      <quartz.version>2.3.2</quartz.version>
       <junit.version>6.1.0</junit.version>
       <mockito.version>5.23.0</mockito.version>
       <assertj.version>3.27.7</assertj.version>
@@ -119,6 +120,16 @@
             <artifactId>honeycomb-telegram-bots</artifactId>
             <version>${project.version}</version>
          </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-scheduling</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-quartz</artifactId>
+            <version>${project.version}</version>
+         </dependency>
 
          <!-- Third Party Dependencies -->
          <dependency>
@@ -160,6 +171,11 @@
             <groupId>org.telegram</groupId>
             <artifactId>telegrambots-client</artifactId>
             <version>${telegrambots.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>org.quartz-scheduler</groupId>
+            <artifactId>quartz</artifactId>
+            <version>${quartz.version}</version>
          </dependency>
 
          <!-- Test Dependencies -->

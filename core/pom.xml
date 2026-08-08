@@ -24,5 +24,6 @@
       <module>honeycomb-rest</module>
       <module>honeycomb-messaging</module>
       <module>honeycomb-telegram</module>
+      <module>honeycomb-scheduling</module>
    </modules>
 </project>
