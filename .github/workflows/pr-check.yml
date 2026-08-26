@@ -3,6 +3,17 @@ name: PR Check
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  checks: write
 
 jobs:
   checkstyle:
@@ -39,3 +50,35 @@ jobs:
 
       - name: Build and test
         run: mvn -B verify -Dcheckstyle.skip=true
+
+      - name: Publish test results
+        uses: mikepenz/action-junit-report@v5
+        if: ${{ !cancelled() }}
+        with:
+          report_paths: '**/target/surefire-reports/TEST-*.xml'
+          check_name: Test Results
+          detailed_summary: true
+          include_passed: false
+          fail_on_failure: false
+
+      - name: Coverage summary
+        if: ${{ !cancelled() }}
+        run: python3 .github/scripts/jacoco-summary.py
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: surefire-reports
+          path: '**/target/surefire-reports/'
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: jacoco-reports
+          path: '**/target/site/jacoco-ut/'
+          retention-days: 14
+          if-no-files-found: warn
