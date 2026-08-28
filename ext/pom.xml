@@ -18,6 +18,7 @@
 
    <modules>
       <module>honeycomb-rest-spring</module>
+      <module>honeycomb-starter-web</module>
       <module>honeycomb-nats</module>
       <module>honeycomb-telegram-bots</module>
       <module>honeycomb-quartz</module>
