@@ -1,0 +1,19 @@
+{
+   "groups": [
+      {
+         "name": "honeycomb.rest",
+         "type": "io.github.jamoamo.honeycomb.starter.web.HoneycombRestProperties",
+         "sourceType": "io.github.jamoamo.honeycomb.starter.web.HoneycombRestProperties"
+      }
+   ],
+   "properties": [
+      {
+         "name": "honeycomb.rest.enabled",
+         "type": "java.lang.Boolean",
+         "description": "Whether the Honeycomb REST handler mapping and handler adapter are registered.",
+         "sourceType": "io.github.jamoamo.honeycomb.starter.web.HoneycombRestProperties",
+         "defaultValue": true
+      }
+   ],
+   "hints": []
+}

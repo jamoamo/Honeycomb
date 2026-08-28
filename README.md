@@ -28,6 +28,7 @@ A use case knows nothing about the adapter that called it and nothing about the 
 | `honeycomb-adapter`       | `AdapterArgumentResolver`, `ValueConverter` — the argument-binding contracts every incoming adapter shares |
 | `honeycomb-rest`          | REST adapter annotations, routing, argument binding, `ApiResponse`, `ProblemDetail`   |
 | `honeycomb-rest-spring`   | Spring WebMVC (Spring Framework 7 / Boot 4) integration for the REST adapter model    |
+| `honeycomb-starter-web`   | Spring Boot starter auto-configuring the Spring WebMVC REST integration               |
 | `honeycomb-messaging`     | Broker-neutral message consumer adapter annotations, subject routing, argument binding, `MessageOutcome` |
 | `honeycomb-nats`          | NATS JetStream binding for the message consumer adapter model                        |
 | `honeycomb-telegram`      | Telegram bot adapter annotations, command routing, argument binding, `BotResponse`    |
@@ -90,6 +91,8 @@ Two things worth knowing when picking modules:
 
 - **`honeycomb-usecase` is always declared explicitly.** The adapter modules deliberately do not depend on it — an
   incoming boundary module knows nothing about use cases — so nothing pulls it in transitively.
+- **On Spring Boot, `honeycomb-starter-web` replaces `honeycomb-rest-spring`.** It brings the same module with
+  it and auto-configures the beans that would otherwise be declared by hand.
 - **Each `ext` module brings its own core module with it.** `honeycomb-rest-spring` brings `honeycomb-rest`,
   `honeycomb-nats` brings `honeycomb-messaging`, `honeycomb-telegram-bots` brings `honeycomb-telegram`, and
   `honeycomb-quartz` brings `honeycomb-scheduling`. Declare a core module on its own only when you are binding it
@@ -201,7 +204,29 @@ public final class UserRestAdapter
 ```
 
 The adapter above is registered at `GET /api/v1/users/{id}`; `fullPath` replaces the `/api/{version}{apiPath}`
-prefix entirely when set. To wire the model into Spring WebMVC, expose two beans from `honeycomb-rest-spring`:
+prefix entirely when set.
+
+On Spring Boot, depend on `honeycomb-starter-web` instead of `honeycomb-rest-spring` and there is nothing to
+wire — the starter auto-configures the handler mapping and handler adapter (along with the route template
+parser and the method invoker they need) in every servlet web application:
+
+```xml
+<dependency>
+   <groupId>io.github.jamoamo.honeycomb</groupId>
+   <artifactId>honeycomb-starter-web</artifactId>
+</dependency>
+```
+
+Each of those beans is conditional on it being missing, so declaring your own bean of a given type replaces
+just that one. Setting `honeycomb.rest.enabled` to `false` registers none of them:
+
+```yaml
+honeycomb:
+   rest:
+      enabled: false
+```
+
+Without Spring Boot, expose two beans from `honeycomb-rest-spring` yourself:
 
 ```java
 @Bean

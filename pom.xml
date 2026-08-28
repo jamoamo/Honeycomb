@@ -50,6 +50,7 @@
       <slf4j.version>2.0.18</slf4j.version>
       <jackson.version>3.0.0</jackson.version>
       <spring.version>7.0.0</spring.version>
+      <spring.boot.version>4.0.0</spring.boot.version>
       <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
       <jnats.version>2.26.0</jnats.version>
       <telegrambots.version>10.1.1</telegrambots.version>
@@ -112,6 +113,11 @@
          </dependency>
          <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-starter-web</artifactId>
+            <version>${project.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>honeycomb-messaging</artifactId>
             <version>${project.version}</version>
          </dependency>
@@ -163,6 +169,11 @@
             <version>${spring.version}</version>
          </dependency>
          <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <version>${spring.boot.version}</version>
+         </dependency>
+         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
             <version>${jakarta.servlet.version}</version>
@@ -193,6 +204,11 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-test</artifactId>
             <version>${spring.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
+            <version>${spring.boot.version}</version>
          </dependency>
          <dependency>
             <groupId>org.junit.jupiter</groupId>
