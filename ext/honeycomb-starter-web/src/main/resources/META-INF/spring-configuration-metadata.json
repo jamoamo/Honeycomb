@@ -13,6 +13,13 @@
          "description": "Whether the Honeycomb REST handler mapping and handler adapter are registered.",
          "sourceType": "io.github.jamoamo.honeycomb.starter.web.HoneycombRestProperties",
          "defaultValue": true
+      },
+      {
+         "name": "honeycomb.rest.order",
+         "type": "java.lang.Integer",
+         "description": "Order of the Honeycomb REST handler mapping among the application's handler mappings. Must stay ahead of Spring's static resource mapping, which matches /** at Ordered.LOWEST_PRECEDENCE - 1.",
+         "sourceType": "io.github.jamoamo.honeycomb.starter.web.HoneycombRestProperties",
+         "defaultValue": 1
       }
    ],
    "hints": []

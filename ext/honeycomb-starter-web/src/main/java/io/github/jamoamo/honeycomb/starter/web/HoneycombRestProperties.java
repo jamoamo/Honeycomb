@@ -23,6 +23,8 @@
  */
 package io.github.jamoamo.honeycomb.starter.web;
 
+import io.github.jamoamo.honeycomb.rest.spring.RestControllerAdapterHandlerMapping;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
@@ -32,10 +34,16 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @author James Amoore
  * @param enabled whether the Honeycomb REST handler mapping and handler adapter are registered; defaults to
  *        {@code true}
+ * @param order   the order of the Honeycomb REST handler mapping among the application's handler mappings;
+ *        defaults to {@link RestControllerAdapterHandlerMapping#DEFAULT_ORDER}. It must stay ahead of
+ *        Spring's static resource mapping, which matches {@code /**} at
+ *        {@link org.springframework.core.Ordered#LOWEST_PRECEDENCE} {@code - 1}
  * @since 1.0.0
  */
 @ConfigurationProperties(prefix = HoneycombRestProperties.PREFIX)
-public record HoneycombRestProperties(@DefaultValue("true") boolean enabled)
+public record HoneycombRestProperties(
+   @DefaultValue("true") boolean enabled,
+   @DefaultValue("1") int order)
 {
    /**
     * The prefix of every property in this group.

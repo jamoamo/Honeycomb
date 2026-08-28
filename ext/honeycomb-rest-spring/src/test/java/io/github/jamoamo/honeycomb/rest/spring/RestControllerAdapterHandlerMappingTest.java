@@ -33,6 +33,7 @@ import io.github.jamoamo.honeycomb.rest.adapter.RestControllerAdapter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.core.Ordered;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.support.StaticWebApplicationContext;
 
@@ -130,6 +131,17 @@ public class RestControllerAdapterHandlerMappingTest
       RestControllerAdapterHandlerMapping mapping = mapping(VersionedAdapter.class);
 
       assertThat(mapping.getHandlerInternal(new MockHttpServletRequest("GET", "/nowhere"))).isNull();
+   }
+
+   @Test
+   @DisplayName("orders itself ahead of Spring's static resource handler mapping")
+   public void testOrderedAheadOfStaticResources()
+   {
+      RestControllerAdapterHandlerMapping mapping = mapping(VersionedAdapter.class);
+
+      assertThat(mapping.getOrder())
+         .isEqualTo(RestControllerAdapterHandlerMapping.DEFAULT_ORDER)
+         .isLessThan(Ordered.LOWEST_PRECEDENCE - 1);
    }
 
    @Test

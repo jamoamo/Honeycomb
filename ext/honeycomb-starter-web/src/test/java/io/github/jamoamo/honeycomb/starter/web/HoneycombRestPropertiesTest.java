@@ -37,20 +37,23 @@ class HoneycombRestPropertiesTest
    @Test
    void exposesTheConfiguredValue()
    {
-      assertThat(new HoneycombRestProperties(false).enabled()).isFalse();
-      assertThat(new HoneycombRestProperties(true).enabled()).isTrue();
+      assertThat(new HoneycombRestProperties(false, 1).enabled()).isFalse();
+      assertThat(new HoneycombRestProperties(true, 1).enabled()).isTrue();
+      assertThat(new HoneycombRestProperties(true, -20).order()).isEqualTo(-20);
    }
 
    @Test
    void hasAValueBasedIdentity()
    {
-      HoneycombRestProperties properties = new HoneycombRestProperties(true);
+      HoneycombRestProperties properties = new HoneycombRestProperties(true, 1);
 
       assertThat(properties)
-         .isEqualTo(new HoneycombRestProperties(true))
-         .hasSameHashCodeAs(new HoneycombRestProperties(true))
-         .isNotEqualTo(new HoneycombRestProperties(false));
+         .isEqualTo(new HoneycombRestProperties(true, 1))
+         .hasSameHashCodeAs(new HoneycombRestProperties(true, 1))
+         .isNotEqualTo(new HoneycombRestProperties(false, 1))
+         .isNotEqualTo(new HoneycombRestProperties(true, 2));
       assertThat(properties.toString()).contains("enabled=true");
+      assertThat(properties.toString()).contains("order=1");
    }
 
    @Test
