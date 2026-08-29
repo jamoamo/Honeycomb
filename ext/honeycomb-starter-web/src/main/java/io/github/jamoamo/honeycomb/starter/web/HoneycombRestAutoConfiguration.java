@@ -108,14 +108,18 @@ public class HoneycombRestAutoConfiguration
     * The handler mapping that registers the routes of every {@code @RestControllerAdapter} bean.
     *
     * @param pathTemplateParser the parser used to compile endpoint route templates
+    * @param properties         the REST integration properties, supplying the mapping's order
     * @return the handler mapping
     */
    @Bean
    @ConditionalOnMissingBean
    public RestControllerAdapterHandlerMapping restControllerAdapterHandlerMapping(
-      final PathTemplateParser pathTemplateParser)
+      final PathTemplateParser pathTemplateParser,
+      final HoneycombRestProperties properties)
    {
-      return new RestControllerAdapterHandlerMapping(pathTemplateParser);
+      RestControllerAdapterHandlerMapping mapping = new RestControllerAdapterHandlerMapping(pathTemplateParser);
+      mapping.setOrder(properties.order());
+      return mapping;
    }
 
    /**

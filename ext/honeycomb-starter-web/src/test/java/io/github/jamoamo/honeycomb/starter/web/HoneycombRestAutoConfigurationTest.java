@@ -35,6 +35,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.ObjectMapper;
 
@@ -129,6 +130,24 @@ class HoneycombRestAutoConfigurationTest
    void defaultsTheEnabledPropertyToTrue()
    {
       runner.run(context -> assertThat(context.getBean(HoneycombRestProperties.class).enabled()).isTrue());
+   }
+
+   @Test
+   void ordersTheHandlerMappingAheadOfTheStaticResourceMapping()
+   {
+      runner.run(context -> assertThat(context.getBean(RestControllerAdapterHandlerMapping.class).getOrder())
+         .isEqualTo(RestControllerAdapterHandlerMapping.DEFAULT_ORDER)
+         .isLessThan(Ordered.LOWEST_PRECEDENCE - 1));
+   }
+
+   @Test
+   void bindsTheOrderProperty()
+   {
+      runner.withPropertyValues("honeycomb.rest.order=-50")
+         .run(context -> {
+            assertThat(context.getBean(HoneycombRestProperties.class).order()).isEqualTo(-50);
+            assertThat(context.getBean(RestControllerAdapterHandlerMapping.class).getOrder()).isEqualTo(-50);
+         });
    }
 
    @Configuration(proxyBeanMethods = false)

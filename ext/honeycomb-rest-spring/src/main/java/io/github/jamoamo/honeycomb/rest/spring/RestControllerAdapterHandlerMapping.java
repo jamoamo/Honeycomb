@@ -48,6 +48,19 @@ import java.util.Arrays;
  */
 public final class RestControllerAdapterHandlerMapping extends AbstractHandlerMapping
 {
+   /**
+    * The default order of this handler mapping.
+    *
+    * <p>
+    * {@link AbstractHandlerMapping} orders itself last of all, but Spring's static resource mapping sits at
+    * {@link org.springframework.core.Ordered#LOWEST_PRECEDENCE} {@code - 1} and matches {@code /**}, so a
+    * mapping left at the default is never consulted and every endpoint surfaces as a missing static resource.
+    * Endpoints are therefore matched just after the annotated controllers of
+    * {@code RequestMappingHandlerMapping}, which orders itself at {@code 0}.
+    * </p>
+    */
+   public static final int DEFAULT_ORDER = 1;
+
    private final ApiRouteMatcher matcher;
 
    /**
@@ -58,6 +71,7 @@ public final class RestControllerAdapterHandlerMapping extends AbstractHandlerMa
    public RestControllerAdapterHandlerMapping(final PathTemplateParser pathTemplateParser)
    {
       this.matcher = new ApiRouteMatcher(pathTemplateParser);
+      setOrder(DEFAULT_ORDER);
    }
 
    /**

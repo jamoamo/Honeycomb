@@ -226,6 +226,17 @@ honeycomb:
       enabled: false
 ```
 
+The handler mapping is ordered at `1` — just behind `RequestMappingHandlerMapping`, so annotated `@RestController`
+routes still win a tie, and well ahead of Spring's static resource mapping, which matches `/**` at
+`Ordered.LOWEST_PRECEDENCE - 1`. A mapping ordered behind that one is never consulted and every endpoint surfaces
+as a `No static resource ...` error instead. Set `honeycomb.rest.order` to place it elsewhere:
+
+```yaml
+honeycomb:
+   rest:
+      order: -50
+```
+
 Without Spring Boot, expose two beans from `honeycomb-rest-spring` yourself:
 
 ```java
