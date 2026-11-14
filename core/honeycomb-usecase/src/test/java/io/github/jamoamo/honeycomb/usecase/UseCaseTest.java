@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Tests for {@link UseCase}.
@@ -147,7 +148,7 @@ public class UseCaseTest
          UseCaseResult<String> result = new EchoUseCase().execute(null);
 
          assertThat(result.isFailure()).isTrue();
-         assertThat(result.error()).map(ErrorCode::code).contains(UseCase.NULL_INPUT);
+         assertThat(result.error()).map(ErrorCode::code).contains(UseCase.ErrorCodes.NULL_INPUT);
       }
 
       @Test
@@ -182,7 +183,7 @@ public class UseCaseTest
          UseCaseResult<String> result = new ValidatingUseCase().execute("NOT LOWER CASE");
 
          assertThat(result.isFailure()).isTrue();
-         assertThat(result.error()).map(ErrorCode::code).contains(UseCase.VALIDATION_FAILED);
+         assertThat(result.error()).map(ErrorCode::code).contains(UseCase.ErrorCodes.VALIDATION_FAILED);
       }
 
       @Test
@@ -236,7 +237,7 @@ public class UseCaseTest
          UseCaseResult<String> result = useCase.execute("input");
 
          assertThat(result.isFailure()).isTrue();
-         assertThat(result.error()).map(ErrorCode::code).contains(UseCase.UNHANDLED_ERROR);
+         assertThat(result.error()).map(ErrorCode::code).contains(UseCase.ErrorCodes.UNHANDLED_ERROR);
       }
 
       @Test
@@ -264,5 +265,33 @@ public class UseCaseTest
             .contains("ThrowingUseCase")
             .contains("the exact error");
       }
+   }
+
+   @Nested
+   @DisplayName("external call")
+   class ExternalCall
+   {
+      @Test
+      @DisplayName("makes a succesful external call")
+      public void testMakeExternalCall()
+      {
+         EchoUseCase useCase = new EchoUseCase();
+         String outcome = useCase.makeExternalCall(s -> s.toUpperCase(), "TestString");
+         assertThat(outcome).isEqualTo("TESTSTRING");
+      }
+
+      @Test
+      @DisplayName("throws use case exception if external call throws exception")
+      public void testMakeExternalCall_throwsException()
+      {
+         EchoUseCase useCase = new EchoUseCase();
+         assertThrows(UseCaseException.class, () -> 
+            useCase.makeExternalCall(s -> makeExceptionCall(s), "Test"));
+      }
+   }
+
+   private String makeExceptionCall(String s) throws Exception
+   {
+      throw new Exception("Test Exception");
    }
 }
