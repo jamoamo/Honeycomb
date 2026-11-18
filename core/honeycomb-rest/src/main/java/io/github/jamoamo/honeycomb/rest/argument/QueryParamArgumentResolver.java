@@ -50,7 +50,7 @@ import java.util.Optional;
  */
 public final class QueryParamArgumentResolver implements AdapterArgumentResolver<ArgumentResolutionContext>
 {
-   private final ValueConverter valueConverter;
+   private final BadRequestValueConverter valueConverter;
 
    /**
     * Constructor.
@@ -112,7 +112,7 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
          return null;
       }
 
-      return valueConverter.convert(rawValue, parameter.getType());
+      return valueConverter.convert(rawValue, parameter.getType(), name);
    }
 
    private Object resolveOptional(
@@ -124,7 +124,7 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
          return Optional.empty();
       }
 
-      return Optional.of(valueConverter.convert(rawValue, elementType(parameter)));
+      return Optional.of(valueConverter.convert(rawValue, elementType(parameter), name));
    }
 
    private Object resolveList(
@@ -135,7 +135,7 @@ public final class QueryParamArgumentResolver implements AdapterArgumentResolver
       Class<?> elementType = elementType(parameter);
       for (String rawValue : rawValues)
       {
-         values.add(valueConverter.convert(rawValue, elementType));
+         values.add(valueConverter.convert(rawValue, elementType, name));
       }
 
       return values;

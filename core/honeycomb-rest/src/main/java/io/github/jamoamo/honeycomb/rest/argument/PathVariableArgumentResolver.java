@@ -38,7 +38,7 @@ import java.lang.reflect.Parameter;
  */
 public final class PathVariableArgumentResolver implements AdapterArgumentResolver<ArgumentResolutionContext>
 {
-   private final ValueConverter valueConverter;
+   private final BadRequestValueConverter valueConverter;
 
    /**
     * Constructor.
@@ -74,6 +74,6 @@ public final class PathVariableArgumentResolver implements AdapterArgumentResolv
          throw new BadRequestException("Missing path variable '" + name + "'.");
       }
 
-      return valueConverter.convert(rawValue, parameter.getType());
+      return valueConverter.convert(rawValue, parameter.getType(), name);
    }
 }

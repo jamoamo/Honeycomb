@@ -23,10 +23,19 @@
  */
 package io.github.jamoamo.honeycomb.rest;
 
+import io.github.jamoamo.honeycomb.adapter.argument.AdapterArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.adapter.PathVariable;
 import io.github.jamoamo.honeycomb.rest.adapter.QueryParam;
+import io.github.jamoamo.honeycomb.rest.argument.ArgumentResolutionContext;
 import io.github.jamoamo.honeycomb.rest.request.RestRequest;
 import io.github.jamoamo.honeycomb.rest.response.ApiResponse;
+import io.github.jamoamo.honeycomb.rest.response.FieldError;
+import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
+import io.github.jamoamo.honeycomb.rest.response.RestResponse;
+import io.github.jamoamo.honeycomb.types.ErrorCategory;
+import io.github.jamoamo.honeycomb.types.ErrorCode;
+import io.github.jamoamo.honeycomb.usecase.UseCaseResult;
+import io.github.jamoamo.honeycomb.usecase.validation.ValidationError;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,13 +44,13 @@ import tools.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 /**
  * Tests for {@link RestControllerAdapterMethodInvoker}.
@@ -51,6 +60,13 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 @DisplayName("RestControllerAdapterMethodInvoker")
 public class RestControllerAdapterMethodInvokerTest
 {
+   private static final ApiResponse<String> CUSTOM_RESPONSE =
+      new ApiResponse<>(Optional.of("custom"), Optional.empty());
+   private static final ProblemDetail NOT_FOUND =
+      ProblemDetail.forStatus(404, "Not Found", "No such thing.", "/things/1", "THING_NOT_FOUND");
+   private static final ProblemDetail CONFLICT =
+      ProblemDetail.forStatus(409, "Conflict", "Already exists.", "/things", "THING_EXISTS");
+
    private final RestControllerAdapterMethodInvoker invoker =
       new RestControllerAdapterMethodInvoker(JsonMapper.builder().build());
 
@@ -75,9 +91,56 @@ public class RestControllerAdapterMethodInvokerTest
          return null;
       }
 
+      public void voidMethod()
+      {
+      }
+
+      public ApiResponse<String> apiResponse()
+      {
+         return CUSTOM_RESPONSE;
+      }
+
+      public ProblemDetail problem()
+      {
+         return NOT_FOUND;
+      }
+
       public String boom()
       {
-         throw new IllegalStateException("kaboom");
+         throw new IllegalStateException("kaboom - internal secret");
+      }
+
+      public String badRequest()
+      {
+         throw new BadRequestException("Invalid widget.");
+      }
+
+      public String problemException()
+      {
+         throw new ProblemDetailException(CONFLICT);
+      }
+
+      public String fatal()
+      {
+         throw new StackOverflowError("fatal");
+      }
+
+      public UseCaseResult<String> useCaseSuccess()
+      {
+         return UseCaseResult.success("done");
+      }
+
+      public UseCaseResult<String> useCaseValidationFailure()
+      {
+         return UseCaseResult.failure(
+            new ErrorCode("VALIDATION_FAILED", ErrorCategory.VALIDATION, "Rejected the input."),
+            List.of(new ValidationError("name", "must not be blank")));
+      }
+
+      public UseCaseResult<String> useCaseInternalFailure()
+      {
+         return UseCaseResult.failure(
+            new ErrorCode("UNHANDLED_ERROR", ErrorCategory.INTERNAL, "Failed: internal secret"));
       }
    }
 
@@ -89,7 +152,7 @@ public class RestControllerAdapterMethodInvokerTest
       RestRequest request = new FakeRestRequest(
          "GET", "/greet/42", Map.of("greeting", List.of("hello")), "");
 
-      ApiResponse<?> response = invoker.invokeRestControllerAdapterMethod(match, request);
+      ApiResponse<?> response = apiResponse(invoker.invokeRestControllerAdapterMethod(match, request));
 
       assertThat(response.data().orElseThrow()).isEqualTo("hello 42");
       assertThat(response.meta()).isEmpty();
@@ -102,7 +165,7 @@ public class RestControllerAdapterMethodInvokerTest
       RouteMatch match = match("echo", Map.of());
       RestRequest request = new FakeRestRequest("POST", "/echo", Map.of(), "{\"name\":\"james\"}");
 
-      ApiResponse<?> response = invoker.invokeRestControllerAdapterMethod(match, request);
+      ApiResponse<?> response = apiResponse(invoker.invokeRestControllerAdapterMethod(match, request));
 
       assertThat(response.data().orElseThrow()).isEqualTo(new Body("james"));
    }
@@ -111,25 +174,143 @@ public class RestControllerAdapterMethodInvokerTest
    @DisplayName("wraps a null result as an empty response")
    public void testWrapsNullResult()
    {
-      ApiResponse<?> response = invoker.invokeRestControllerAdapterMethod(
-         match("nothing", Map.of()), new FakeRestRequest("GET", "/nothing"));
-
-      assertThat(response.data()).isEmpty();
+      assertThat(apiResponse(invoke("nothing")).data()).isEmpty();
    }
 
    @Test
-   @DisplayName("surfaces a handler exception as a RestException carrying the cause")
-   public void testHandlerExceptionSurfacesAsRestException()
+   @DisplayName("wraps a void method as an empty response")
+   public void testWrapsVoidResult()
    {
-      assertThatExceptionOfType(RestException.class)
-         .isThrownBy(() -> invoker.invokeRestControllerAdapterMethod(
-            match("boom", Map.of()), new FakeRestRequest("GET", "/boom")))
-         .withCauseInstanceOf(IllegalStateException.class);
+      assertThat(apiResponse(invoke("voidMethod")).data()).isEmpty();
    }
 
    @Test
-   @DisplayName("surfaces a request read failure as a RestException")
-   public void testBodyReadFailureSurfacesAsRestException()
+   @DisplayName("returns an ApiResponse result as-is")
+   public void testReturnsApiResponseAsIs()
+   {
+      assertThat(invoke("apiResponse")).isSameAs(CUSTOM_RESPONSE);
+   }
+
+   @Test
+   @DisplayName("returns a ProblemDetail result as-is")
+   public void testReturnsProblemDetailAsIs()
+   {
+      assertThat(invoke("problem")).isSameAs(NOT_FOUND);
+   }
+
+   @Test
+   @DisplayName("maps an unexpected handler exception to a generic 500 problem detail")
+   public void testHandlerExceptionMapsToInternalServerError()
+   {
+      ProblemDetail problem = problemDetail(invoke("boom"));
+
+      assertThat(problem)
+         .usingRecursiveComparison()
+         .ignoringFields("errorId")
+         .isEqualTo(ProblemDetail.internalServerError(
+            ExceptionProblemDetailMapper.INTERNAL_SERVER_ERROR_DETAIL, "/boom", null));
+      assertThat(problem.errorId()).isNotBlank();
+   }
+
+   @Test
+   @DisplayName("rethrows a JVM Error thrown by the handler instead of mapping it")
+   public void testHandlerErrorIsRethrown()
+   {
+      assertThatExceptionOfType(StackOverflowError.class).isThrownBy(() -> invoke("fatal"));
+   }
+
+   @Test
+   @DisplayName("maps an unexpected runtime exception from an argument resolver to a 500 problem detail")
+   public void testResolverRuntimeExceptionMapsTo500()
+   {
+      RestControllerAdapterMethodInvoker throwing = new RestControllerAdapterMethodInvoker(
+         List.of(resolverThrowing(new IllegalArgumentException("resolver bug"))));
+
+      ProblemDetail problem = problemDetail(throwing.invokeRestControllerAdapterMethod(
+         match("echo", Map.of()), new FakeRestRequest("POST", "/echo")));
+
+      assertThat(problem.status()).isEqualTo(500);
+      assertThat(problem.detail()).isEqualTo(ExceptionProblemDetailMapper.INTERNAL_SERVER_ERROR_DETAIL);
+      assertThat(problem.errorId()).isNotBlank();
+   }
+
+   @Test
+   @DisplayName("returns the problem carried by a ProblemDetailException thrown from an argument resolver")
+   public void testResolverProblemDetailExceptionReturnsCarriedProblem()
+   {
+      RestControllerAdapterMethodInvoker throwing = new RestControllerAdapterMethodInvoker(
+         List.of(resolverThrowing(new ProblemDetailException(CONFLICT))));
+
+      assertThat(throwing.invokeRestControllerAdapterMethod(
+         match("echo", Map.of()), new FakeRestRequest("POST", "/echo"))).isSameAs(CONFLICT);
+   }
+
+   @Test
+   @DisplayName("maps a successful use case result to an ApiResponse carrying its output")
+   public void testUseCaseSuccessMapsToApiResponse()
+   {
+      assertThat(apiResponse(invoke("useCaseSuccess")).data().orElseThrow()).isEqualTo("done");
+   }
+
+   @Test
+   @DisplayName("maps a validation use case failure to a 400 problem detail carrying the field errors")
+   public void testUseCaseValidationFailureMapsTo400()
+   {
+      ProblemDetail problem = problemDetail(invoke("useCaseValidationFailure"));
+
+      assertThat(problem).isEqualTo(
+         ProblemDetail.forStatus(400, "Bad Request", "Rejected the input.", "/useCaseValidationFailure",
+               "VALIDATION_FAILED")
+            .withErrors(List.of(new FieldError("name", "must not be blank"))));
+   }
+
+   @Test
+   @DisplayName("maps an internal use case failure to a generic 500 problem detail with an error id")
+   public void testUseCaseInternalFailureMapsTo500()
+   {
+      ProblemDetail problem = problemDetail(invoke("useCaseInternalFailure"));
+
+      assertThat(problem.status()).isEqualTo(500);
+      assertThat(problem.code()).isEqualTo("UNHANDLED_ERROR");
+      assertThat(problem.detail()).isEqualTo(ExceptionProblemDetailMapper.INTERNAL_SERVER_ERROR_DETAIL);
+      assertThat(problem.errorId()).isNotBlank();
+   }
+
+   @Test
+   @DisplayName("maps a BadRequestException thrown by the handler to a 400 problem detail")
+   public void testHandlerBadRequestMapsTo400()
+   {
+      ProblemDetail problem = problemDetail(invoke("badRequest"));
+
+      assertThat(problem.status()).isEqualTo(400);
+      assertThat(problem.detail()).isEqualTo("Invalid widget.");
+      assertThat(problem.instance()).isEqualTo("/badRequest");
+   }
+
+   @Test
+   @DisplayName("returns the problem detail carried by a ProblemDetailException as-is")
+   public void testProblemDetailExceptionReturnsCarriedProblem()
+   {
+      assertThat(invoke("problemException")).isSameAs(CONFLICT);
+   }
+
+   @Test
+   @DisplayName("maps an argument binding failure to a 400 problem detail")
+   public void testBindingFailureMapsTo400()
+   {
+      RouteMatch match = match("greet", Map.of("id", "not-a-number"));
+      RestRequest request = new FakeRestRequest(
+         "GET", "/greet/x", Map.of("greeting", List.of("hello")), "");
+
+      ProblemDetail problem = problemDetail(invoker.invokeRestControllerAdapterMethod(match, request));
+
+      assertThat(problem).isEqualTo(
+         ProblemDetail.badRequest("Invalid value for parameter 'id'.", "/greet/x", null));
+   }
+
+   @Test
+   @DisplayName("maps a request read failure to a generic 500 problem detail")
+   public void testBodyReadFailureMapsTo500()
    {
       RestRequest failing = new RestRequest()
       {
@@ -158,9 +339,11 @@ public class RestControllerAdapterMethodInvokerTest
          }
       };
 
-      assertThatExceptionOfType(RestException.class)
-         .isThrownBy(() -> invoker.invokeRestControllerAdapterMethod(match("echo", Map.of()), failing))
-         .withCauseInstanceOf(IOException.class);
+      ProblemDetail problem =
+         problemDetail(invoker.invokeRestControllerAdapterMethod(match("echo", Map.of()), failing));
+
+      assertThat(problem.status()).isEqualTo(500);
+      assertThat(problem.detail()).isEqualTo(ExceptionProblemDetailMapper.INTERNAL_SERVER_ERROR_DETAIL);
    }
 
    @Test
@@ -169,7 +352,7 @@ public class RestControllerAdapterMethodInvokerTest
    {
       RestControllerAdapterMethodInvoker noResolvers = new RestControllerAdapterMethodInvoker(List.of());
 
-      assertThatIllegalStateException()
+      assertThatExceptionOfType(MissingArgumentResolverException.class)
          .isThrownBy(() -> noResolvers.invokeRestControllerAdapterMethod(
             match("echo", Map.of()), new FakeRestRequest("POST", "/echo")))
          .withMessageContaining("No argument resolver");
@@ -181,10 +364,56 @@ public class RestControllerAdapterMethodInvokerTest
    {
       RestControllerAdapterMethodInvoker noResolvers = new RestControllerAdapterMethodInvoker(List.of());
 
-      ApiResponse<?> response = noResolvers.invokeRestControllerAdapterMethod(
-         match("nothing", Map.of()), new FakeRestRequest("GET", "/nothing"));
+      ApiResponse<?> response = apiResponse(noResolvers.invokeRestControllerAdapterMethod(
+         match("nothing", Map.of()), new FakeRestRequest("GET", "/nothing")));
 
       assertThat(response.data()).isEmpty();
+   }
+
+   @Test
+   @DisplayName("wraps a data value via the Optional-based response factory")
+   public void testResponseFactory()
+   {
+      ApiResponse<String> response = ApiResponse.of("value");
+
+      assertThat(response.data()).contains("value");
+      assertThat(response.meta()).isEmpty();
+   }
+
+   private RestResponse invoke(final String methodName)
+   {
+      return invoker.invokeRestControllerAdapterMethod(
+         match(methodName, Map.of()), new FakeRestRequest("GET", "/" + methodName));
+   }
+
+   private static ApiResponse<?> apiResponse(final RestResponse response)
+   {
+      assertThat(response).isInstanceOf(ApiResponse.class);
+      return (ApiResponse<?>) response;
+   }
+
+   private static ProblemDetail problemDetail(final RestResponse response)
+   {
+      assertThat(response).isInstanceOf(ProblemDetail.class);
+      return (ProblemDetail) response;
+   }
+
+   private static AdapterArgumentResolver<ArgumentResolutionContext> resolverThrowing(final RuntimeException ex)
+   {
+      return new AdapterArgumentResolver<>()
+      {
+         @Override
+         public boolean supports(final Parameter parameter)
+         {
+            return true;
+         }
+
+         @Override
+         public Object resolve(final Parameter parameter, final ArgumentResolutionContext context)
+         {
+            throw ex;
+         }
+      };
    }
 
    private static RouteMatch match(final String methodName, final Map<String, String> pathVariables)
@@ -198,15 +427,5 @@ public class RestControllerAdapterMethodInvokerTest
       }
 
       throw new AssertionError("No such method: " + methodName);
-   }
-
-   @Test
-   @DisplayName("wraps a data value via the Optional-based response factory")
-   public void testResponseFactory()
-   {
-      ApiResponse<String> response = ApiResponse.of("value");
-
-      assertThat(response.data()).contains("value");
-      assertThat(response.meta()).isEmpty();
    }
 }

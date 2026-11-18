@@ -24,9 +24,14 @@
 package io.github.jamoamo.honeycomb.rest.spring;
 
 import io.github.jamoamo.honeycomb.rest.HandlerMethod;
+import io.github.jamoamo.honeycomb.rest.ProblemDetailException;
 import io.github.jamoamo.honeycomb.rest.RestControllerAdapterMethodInvoker;
 import io.github.jamoamo.honeycomb.rest.RouteMatch;
 import io.github.jamoamo.honeycomb.rest.adapter.QueryParam;
+import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
+import io.github.jamoamo.honeycomb.types.ErrorCategory;
+import io.github.jamoamo.honeycomb.types.ErrorCode;
+import io.github.jamoamo.honeycomb.usecase.UseCaseResult;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -61,6 +66,23 @@ public class RestControllerAdapterHandlerAdapterTest
       public String boom()
       {
          throw new IllegalStateException("kaboom");
+      }
+
+      public ProblemDetail missing()
+      {
+         return ProblemDetail.forStatus(404, "Not Found", "No such thing.", "/missing", "THING_NOT_FOUND");
+      }
+
+      public String conflict()
+      {
+         throw new ProblemDetailException(
+            ProblemDetail.forStatus(409, "Conflict", "Already exists.", "/conflict", "THING_EXISTS"));
+      }
+
+      public UseCaseResult<String> useCaseNotFound()
+      {
+         return UseCaseResult.failure(
+            new ErrorCode("WIDGET_NOT_FOUND", ErrorCategory.NOT_FOUND, "No such widget."));
       }
    }
 
@@ -101,8 +123,55 @@ public class RestControllerAdapterHandlerAdapterTest
       assertThat(response.getContentAsString())
          .contains("\"title\":\"Bad Request\"")
          .contains("\"status\":400")
-         .contains("\"instance\":\"/hello\"")
-         .contains("\"code\":\"BadRequestException\"");
+         .contains("\"instance\":\"/hello\"");
+   }
+
+   @Test
+   @DisplayName("writes a returned problem detail with its own status")
+   public void testWritesReturnedProblemDetail() throws Exception
+   {
+      MockHttpServletRequest request = new MockHttpServletRequest("GET", "/missing");
+      MockHttpServletResponse response = new MockHttpServletResponse();
+
+      adapter.handle(request, response, match("missing"));
+
+      assertThat(response.getStatus()).isEqualTo(404);
+      assertThat(response.getContentType()).isEqualTo("application/problem+json");
+      assertThat(response.getContentAsString())
+         .contains("\"title\":\"Not Found\"")
+         .contains("\"status\":404")
+         .contains("\"code\":\"THING_NOT_FOUND\"");
+   }
+
+   @Test
+   @DisplayName("writes the problem carried by a ProblemDetailException with its own status")
+   public void testWritesCarriedProblemDetail() throws Exception
+   {
+      MockHttpServletRequest request = new MockHttpServletRequest("POST", "/conflict");
+      MockHttpServletResponse response = new MockHttpServletResponse();
+
+      adapter.handle(request, response, match("conflict"));
+
+      assertThat(response.getStatus()).isEqualTo(409);
+      assertThat(response.getContentType()).isEqualTo("application/problem+json");
+      assertThat(response.getContentAsString())
+         .contains("\"title\":\"Conflict\"")
+         .contains("\"status\":409")
+         .contains("\"code\":\"THING_EXISTS\"");
+   }
+
+   @Test
+   @DisplayName("writes a failed use case result as a problem detail with the mapped status")
+   public void testWritesUseCaseFailure() throws Exception
+   {
+      MockHttpServletRequest request = new MockHttpServletRequest("GET", "/useCaseNotFound");
+      MockHttpServletResponse response = new MockHttpServletResponse();
+
+      adapter.handle(request, response, match("useCaseNotFound"));
+
+      assertThat(response.getStatus()).isEqualTo(404);
+      assertThat(response.getContentType()).isEqualTo("application/problem+json");
+      assertThat(response.getContentAsString()).contains("\"code\":\"WIDGET_NOT_FOUND\"");
    }
 
    @Test
@@ -118,7 +187,9 @@ public class RestControllerAdapterHandlerAdapterTest
       assertThat(response.getContentType()).isEqualTo("application/problem+json");
       assertThat(response.getContentAsString())
          .contains("\"title\":\"Internal Server Error\"")
-         .contains("\"status\":500");
+         .contains("\"status\":500")
+         .contains("\"errorId\":\"")
+         .doesNotContain("kaboom");
    }
 
    private static RouteMatch match(final String methodName)

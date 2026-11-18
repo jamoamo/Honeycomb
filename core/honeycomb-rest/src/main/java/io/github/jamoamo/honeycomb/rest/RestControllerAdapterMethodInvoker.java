@@ -32,9 +32,10 @@ import io.github.jamoamo.honeycomb.rest.argument.QueryParamArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.argument.RequestBodyArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.request.RestRequest;
 import io.github.jamoamo.honeycomb.rest.response.ApiResponse;
+import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
+import io.github.jamoamo.honeycomb.rest.response.RestResponse;
+import io.github.jamoamo.honeycomb.usecase.UseCaseResult;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -48,8 +49,8 @@ import java.util.List;
  *
  * <p>
  * Arguments are bound from the request by consulting the configured {@link AdapterArgumentResolver}s in order
- * for each parameter, the handler method is invoked, and its return value is wrapped in an
- * {@link ApiResponse} so that every endpoint produces a consistent response shape.
+ * for each parameter, the handler method is invoked, and its result or exception is converted to a
+ * {@link RestResponse}; see {@link #invokeRestControllerAdapterMethod(RouteMatch, RestRequest)} for the rules.
  * </p>
  *
  * @author James Amoore
@@ -57,9 +58,9 @@ import java.util.List;
  */
 public final class RestControllerAdapterMethodInvoker
 {
-   private static final Logger LOGGER = LoggerFactory.getLogger(RestControllerAdapterMethodInvoker.class);
-
    private final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers;
+   private final ExceptionProblemDetailMapper exceptionMapper;
+   private final UseCaseResultMapper useCaseResultMapper;
 
    /**
     * Constructor using the default argument resolvers.
@@ -80,19 +81,50 @@ public final class RestControllerAdapterMethodInvoker
    public RestControllerAdapterMethodInvoker(
       final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers)
    {
+      this(argumentResolvers, new ExceptionProblemDetailMapper());
+   }
+
+   /**
+    * Constructor.
+    *
+    * @param argumentResolvers the ordered resolvers used to bind handler-method parameters
+    * @param exceptionMapper   the mapper used to turn exceptions into problem details
+    */
+   RestControllerAdapterMethodInvoker(
+      final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers,
+      final ExceptionProblemDetailMapper exceptionMapper)
+   {
       this.argumentResolvers = List.copyOf(argumentResolvers);
+      this.exceptionMapper = exceptionMapper;
+      this.useCaseResultMapper = new UseCaseResultMapper(exceptionMapper);
    }
 
    /**
     * Invokes the handler method matched for the request.
     *
+    * <p>
+    * The handler result is converted as follows:
+    * </p>
+    * <ul>
+    * <li>an {@link ApiResponse} or {@link ProblemDetail} is returned as-is;</li>
+    * <li>a {@link UseCaseResult} is mapped: a success to an {@link ApiResponse} carrying its output, a failure to
+    * a {@link ProblemDetail} whose status is derived from the failure's error category;</li>
+    * <li>anything else, including {@code null} or a {@code void} method, is wrapped in an {@link ApiResponse}.</li>
+    * </ul>
+    * <p>
+    * Exceptions raised while binding arguments or invoking the handler are mapped to a {@link ProblemDetail}: a
+    * {@link ProblemDetailException} to the problem it carries, a {@link BadRequestException} to a {@code 400}, and
+    * anything else to a generic {@code 500} carrying an error id that is also logged. JVM {@link Error}s are not
+    * mapped and propagate.
+    * </p>
+    *
     * @param match   the matched route to invoke
     * @param request the request being handled
-    * @return the api response that should be returned
-    * @throws BadRequestException if a parameter cannot be bound from the request
-    * @throws RestException       if the handler method throws or cannot be executed
+    * @return the response that should be returned
+    * @throws MissingArgumentResolverException if no argument resolver supports a handler-method parameter
     */
-   public ApiResponse<?> invokeRestControllerAdapterMethod(final RouteMatch match, final RestRequest request)
+   @SuppressWarnings("checkstyle:IllegalCatch")
+   public RestResponse invokeRestControllerAdapterMethod(final RouteMatch match, final RestRequest request)
    {
       Method handlerMethod = match.handler().method();
       ArgumentResolutionContext context = new ArgumentResolutionContext(request, match.pathVariables());
@@ -102,18 +134,36 @@ public final class RestControllerAdapterMethodInvoker
          Object[] args = resolveArguments(handlerMethod, context);
          Object result = handlerMethod.invoke(match.handler().bean(), args);
 
-         return ApiResponse.of(result);
+         return toResponse(result, request);
       }
       catch (final InvocationTargetException ex)
       {
-         LOGGER.error("Exception invoking handling method.", ex);
-         throw new RestException("Error invoking handling method", ex.getCause());
+         Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+         if (cause instanceof Error error)
+         {
+            throw error;
+         }
+         return exceptionMapper.map(cause, request);
       }
-      catch (final IOException | IllegalAccessException ex)
+      catch (final MissingArgumentResolverException ex)
       {
-         LOGGER.error("Rest controller adapter method error.", ex);
-         throw new RestException("Method couldn't be executed", ex);
+         // A configuration error, not a request failure: fail fast rather than answering with a 500.
+         throw ex;
       }
+      catch (final RuntimeException | IOException | IllegalAccessException ex)
+      {
+         return exceptionMapper.map(ex, request);
+      }
+   }
+
+   private RestResponse toResponse(final Object result, final RestRequest request)
+   {
+      return switch (result)
+      {
+         case RestResponse response -> response;
+         case UseCaseResult<?> useCaseResult -> useCaseResultMapper.map(useCaseResult, request);
+         case null, default -> ApiResponse.of(result);
+      };
    }
 
    private Object[] resolveArguments(final Method handlerMethod, final ArgumentResolutionContext context)
@@ -141,7 +191,7 @@ public final class RestControllerAdapterMethodInvoker
          }
       }
 
-      throw new IllegalStateException("No argument resolver supports parameter " + parameter + ".");
+      throw new MissingArgumentResolverException("No argument resolver supports parameter " + parameter + ".");
    }
 
    private static List<AdapterArgumentResolver<ArgumentResolutionContext>> defaultResolvers(

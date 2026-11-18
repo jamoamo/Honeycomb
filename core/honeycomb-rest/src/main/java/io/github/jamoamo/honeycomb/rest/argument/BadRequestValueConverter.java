@@ -54,13 +54,29 @@ final class BadRequestValueConverter implements ValueConverter
    @Override
    public Object convert(final String value, final Class<?> targetType)
    {
+      return convert(value, targetType, null);
+   }
+
+   /**
+    * Converts the value of the named request parameter. The client-facing message only names the parameter;
+    * the conversion failure, which may describe internal types or echo the input, is kept as the cause.
+    *
+    * @param value      the raw value
+    * @param targetType the type to convert to
+    * @param name       the name of the parameter being converted, or {@code null} when unknown
+    * @return the converted value
+    * @throws BadRequestException if the value cannot be converted
+    */
+   Object convert(final String value, final Class<?> targetType, final String name)
+   {
       try
       {
          return delegate.convert(value, targetType);
       }
       catch (final ValueConversionException ex)
       {
-         throw new BadRequestException(ex.getMessage(), ex);
+         String message = name == null ? "Invalid parameter value." : "Invalid value for parameter '" + name + "'.";
+         throw new BadRequestException(message, ex);
       }
    }
 }
