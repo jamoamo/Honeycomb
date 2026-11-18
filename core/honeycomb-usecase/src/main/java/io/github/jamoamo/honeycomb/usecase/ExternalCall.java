@@ -35,7 +35,7 @@ package io.github.jamoamo.honeycomb.usecase;
  * @param <P> the input type of the call
  * @param <R> the result type of the call
  *
- * @since 1.0.1
+ * @since 1.1.0
  */
 @FunctionalInterface
 public interface ExternalCall<P, R>

@@ -23,12 +23,11 @@
  */
 package io.github.jamoamo.honeycomb.rest.spring;
 
-import io.github.jamoamo.honeycomb.rest.BadRequestException;
 import io.github.jamoamo.honeycomb.rest.RestControllerAdapterMethodInvoker;
-import io.github.jamoamo.honeycomb.rest.RestException;
 import io.github.jamoamo.honeycomb.rest.RouteMatch;
 import io.github.jamoamo.honeycomb.rest.response.ApiResponse;
 import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
+import io.github.jamoamo.honeycomb.rest.response.RestResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -42,10 +41,9 @@ import tools.jackson.databind.ObjectMapper;
  * {@link RestControllerAdapterHandlerMapping}.
  *
  * <p>
- * A successful invocation is written as a JSON {@link ApiResponse}. A binding failure is written as a
- * {@code 400} {@link ProblemDetail} and any other handling failure as a {@code 500} {@link ProblemDetail},
- * both with the {@code application/problem+json} media type, so that every endpoint surfaces errors in the
- * same shape.
+ * The invoker's {@link RestResponse} is written with its {@link RestResponse#status() status}: an
+ * {@link ApiResponse} as {@code application/json} and a {@link ProblemDetail} as
+ * {@code application/problem+json}, so that every endpoint surfaces errors in the same shape.
  * </p>
  *
  * @author James Amoore
@@ -93,30 +91,15 @@ public final class RestControllerAdapterHandlerAdapter implements HandlerAdapter
       throws Exception
    {
       ServletRestRequest request = new ServletRestRequest(req);
-      try
-      {
-         ApiResponse<?> result = invoker.invokeRestControllerAdapterMethod((RouteMatch) handler, request);
+      RestResponse result = invoker.invokeRestControllerAdapterMethod((RouteMatch) handler, request);
 
-         res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-         objectMapper.writeValue(res.getOutputStream(), result);
-      }
-      catch (final BadRequestException ex)
+      res.setStatus(result.status());
+      res.setContentType(switch (result)
       {
-         writeProblemDetail(res, ProblemDetail.badRequest(
-            ex.getMessage(), request.path(), ex.getClass().getSimpleName()));
-      }
-      catch (final RestException ex)
-      {
-         writeProblemDetail(res, ProblemDetail.internalServerError(
-            ex.getMessage(), request.path(), ex.getClass().getSimpleName()));
-      }
+         case ApiResponse<?> response -> MediaType.APPLICATION_JSON_VALUE;
+         case ProblemDetail problem -> MediaType.APPLICATION_PROBLEM_JSON_VALUE;
+      });
+      objectMapper.writeValue(res.getOutputStream(), result);
       return null;
-   }
-
-   private void writeProblemDetail(final HttpServletResponse res, final ProblemDetail detail) throws Exception
-   {
-      res.setStatus(detail.status());
-      res.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-      objectMapper.writeValue(res.getOutputStream(), detail);
    }
 }

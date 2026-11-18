@@ -23,6 +23,8 @@
  */
 package io.github.jamoamo.honeycomb.rest.response;
 
+import java.util.List;
+
 /**
  * An RFC 9457 problem details document, the shape every API error response is surfaced in so that error
  * handling is consistent across endpoints and integrations.
@@ -33,10 +35,22 @@ package io.github.jamoamo.honeycomb.rest.response;
  * @param status   the HTTP status code for this occurrence of the problem
  * @param detail   a human-readable explanation specific to this occurrence of the problem
  * @param instance a URI reference identifying this occurrence of the problem, typically the request path
- * @param code     a stable, machine-readable identifier of the specific failure
+ * @param code     a stable, machine-readable identifier of the specific failure, or {@code null} when none applies
+ * @param errorId  a unique identifier for this occurrence, also written to the server log so the two can be
+ *                 correlated; set for unexpected server errors, otherwise {@code null}
+ * @param errors   the individual field-level errors, for example failed validations; never {@code null}
  * @since 1.0.0
  */
-public record ProblemDetail(String type, String title, int status, String detail, String instance, String code)
+public record ProblemDetail(
+   String type,
+   String title,
+   int status,
+   String detail,
+   String instance,
+   String code,
+   String errorId,
+   List<FieldError> errors)
+   implements RestResponse
 {
    /**
     * The problem type used when no specific type is supplied.
@@ -45,6 +59,59 @@ public record ProblemDetail(String type, String title, int status, String detail
 
    private static final int STATUS_BAD_REQUEST = 400;
    private static final int STATUS_INTERNAL_SERVER_ERROR = 500;
+
+   /**
+    * Constructor.
+    */
+   public ProblemDetail
+   {
+      errors = errors == null ? List.of() : List.copyOf(errors);
+   }
+
+   /**
+    * Constructor for a problem without an error id or field errors.
+    *
+    * @param type     the problem type
+    * @param title    the summary of the problem type
+    * @param status   the HTTP status code
+    * @param detail   the explanation of the problem
+    * @param instance the request path the problem occurred on
+    * @param code     the machine-readable failure identifier
+    */
+   public ProblemDetail(
+      final String type,
+      final String title,
+      final int status,
+      final String detail,
+      final String instance,
+      final String code)
+   {
+      this(type, title, status, detail, instance, code, null, List.of());
+   }
+
+   /**
+    * Returns a copy of this problem with the given error id.
+    *
+    * @param newErrorId the error id
+    * @return the copy
+    * @since 1.1.0
+    */
+   public ProblemDetail withErrorId(final String newErrorId)
+   {
+      return new ProblemDetail(type, title, status, detail, instance, code, newErrorId, errors);
+   }
+
+   /**
+    * Returns a copy of this problem with the given field errors.
+    *
+    * @param newErrors the field errors
+    * @return the copy
+    * @since 1.1.0
+    */
+   public ProblemDetail withErrors(final List<FieldError> newErrors)
+   {
+      return new ProblemDetail(type, title, status, detail, instance, code, errorId, newErrors);
+   }
 
    /**
     * Creates a {@code 400 Bad Request} problem.
