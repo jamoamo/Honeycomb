@@ -59,20 +59,29 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class UseCase<I, O>
 {
-   /**
-    * The code of the failure returned when {@code null} input is supplied to a use case.
-    */
-   public static final String NULL_INPUT = "NULL_INPUT";
+   protected static final class ErrorCodes 
+   {
+      /**
+       * The code of the failure returned when {@code null} input is supplied to a use case.
+       */
+      public static final String NULL_INPUT = "NULL_INPUT";
+      /**
+       * The code of the failure returned when the input fails {@link #validate(Object)}.
+       */
+      public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
 
-   /**
-    * The code of the failure returned when the input fails {@link #validate(Object)}.
-    */
-   public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
+      /**
+       * The code of the failure returned when a use case throws something it did not anticipate.
+       */
+      public static final String UNHANDLED_ERROR = "UNHANDLED_ERROR";
 
-   /**
-    * The code of the failure returned when a use case throws something it did not anticipate.
-    */
-   public static final String UNHANDLED_ERROR = "UNHANDLED_ERROR";
+      /**
+       * The code of the failure when an external service throws an error.
+       */
+      public static final String EXTERNAL_ERROR = "EXTERNAL_ERROR";
+
+      private ErrorCodes(){}
+   }
 
    private static final Logger LOGGER = LoggerFactory.getLogger(UseCase.class);
    private static final String DESCRIPTION_PREFIX = "Use case (";
@@ -160,7 +169,7 @@ public abstract class UseCase<I, O>
    private ErrorCode nullInputError()
    {
       return new ErrorCode(
-         NULL_INPUT,
+         ErrorCodes.NULL_INPUT,
          ErrorCategory.VALIDATION,
          DESCRIPTION_PREFIX + useCaseName() + ") requires an input.");
    }
@@ -168,7 +177,7 @@ public abstract class UseCase<I, O>
    private ErrorCode validationFailedError()
    {
       return new ErrorCode(
-         VALIDATION_FAILED,
+         ErrorCodes.VALIDATION_FAILED,
          ErrorCategory.VALIDATION,
          DESCRIPTION_PREFIX + useCaseName() + ") rejected the supplied input.");
    }
@@ -176,9 +185,40 @@ public abstract class UseCase<I, O>
    private ErrorCode unhandledError(final Throwable cause)
    {
       return new ErrorCode(
-         UNHANDLED_ERROR,
+         ErrorCodes.UNHANDLED_ERROR,
          ErrorCategory.INTERNAL,
          DESCRIPTION_PREFIX + useCaseName() + ") failed to handle error: " + cause.getMessage());
+   }
+
+   private ErrorCode externalError(final Throwable cause)
+   {
+      return new ErrorCode(
+         ErrorCodes.EXTERNAL_ERROR, 
+         ErrorCategory.INTERNAL, 
+         DESCRIPTION_PREFIX + useCaseName() + ") failed due to external error: " + cause.getMessage());
+   }
+
+   /**
+    * Makes a call to an external system such as a database, message queue or 3rd party system.
+    * 
+    * @param externalCall the external call to make
+    * @param input the input to the external call
+    * @param <P> the input type to the external call
+    * @param <R> the output type of the external call
+    * 
+    * @return the result of the external call.
+    */
+   @SuppressWarnings("checkstyle:IllegalCatch")
+   protected final <P, R> R makeExternalCall(final ExternalCall<P, R> externalCall, final P input)
+   {
+      try
+      {
+         return externalCall.apply(input);
+      }
+      catch(Throwable t)
+      {
+         throw new UseCaseException(externalError(t));
+      }
    }
 
    private String useCaseName()
