@@ -96,7 +96,7 @@ public final class RestControllerAdapterMethodInvoker
    {
       this.argumentResolvers = List.copyOf(argumentResolvers);
       this.exceptionMapper = exceptionMapper;
-      this.useCaseResultMapper = new UseCaseResultMapper(exceptionMapper);
+      this.useCaseResultMapper = new UseCaseResultMapper();
    }
 
    /**
