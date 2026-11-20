@@ -23,6 +23,8 @@
  */
 package io.github.jamoamo.honeycomb.starter.web;
 
+import io.github.jamoamo.honeycomb.rest.DefaultFailureProblemMapper;
+import io.github.jamoamo.honeycomb.rest.FailureProblemMapper;
 import io.github.jamoamo.honeycomb.rest.PathTemplateParser;
 import io.github.jamoamo.honeycomb.rest.RestControllerAdapterMethodInvoker;
 import io.github.jamoamo.honeycomb.rest.spring.PathPatternTemplateParser;
@@ -91,17 +93,32 @@ public class HoneycombRestAutoConfiguration
    }
 
    /**
+    * The policy that maps failed endpoint results to problem details; declare a {@link FailureProblemMapper} bean
+    * to change how error codes surface over HTTP.
+    *
+    * @return the failure problem mapper
+    */
+   @Bean
+   @ConditionalOnMissingBean
+   public FailureProblemMapper honeycombFailureProblemMapper()
+   {
+      return new DefaultFailureProblemMapper();
+   }
+
+   /**
     * The invoker that binds request values to handler-method parameters and invokes them.
     *
-    * @param objectMapper the object mapper used to deserialize request bodies
+    * @param objectMapper  the object mapper used to deserialize request bodies
+    * @param failureMapper the policy that maps failed endpoint results to problem details
     * @return the method invoker
     */
    @Bean
    @ConditionalOnMissingBean
    public RestControllerAdapterMethodInvoker honeycombRestControllerAdapterMethodInvoker(
-      final ObjectMapper objectMapper)
+      final ObjectMapper objectMapper,
+      final FailureProblemMapper failureMapper)
    {
-      return new RestControllerAdapterMethodInvoker(objectMapper);
+      return new RestControllerAdapterMethodInvoker(objectMapper, failureMapper);
    }
 
    /**

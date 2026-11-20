@@ -23,8 +23,11 @@
  */
 package io.github.jamoamo.honeycomb.starter.web;
 
+import io.github.jamoamo.honeycomb.rest.DefaultFailureProblemMapper;
+import io.github.jamoamo.honeycomb.rest.FailureProblemMapper;
 import io.github.jamoamo.honeycomb.rest.PathTemplateParser;
 import io.github.jamoamo.honeycomb.rest.RestControllerAdapterMethodInvoker;
+import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
 import io.github.jamoamo.honeycomb.rest.spring.PathPatternTemplateParser;
 import io.github.jamoamo.honeycomb.rest.spring.RestControllerAdapterHandlerAdapter;
 import io.github.jamoamo.honeycomb.rest.spring.RestControllerAdapterHandlerMapping;
@@ -107,6 +110,37 @@ class HoneycombRestAutoConfigurationTest
                .isSameAs(context.getBean("customHandlerAdapter"));
             assertThat(context.getBean(ObjectMapper.class)).isSameAs(context.getBean("customObjectMapper"));
          });
+   }
+
+   @Test
+   void registersTheDefaultFailureProblemMapper()
+   {
+      runner.run(context -> assertThat(context)
+         .getBean(FailureProblemMapper.class)
+         .isInstanceOf(DefaultFailureProblemMapper.class));
+   }
+
+   @Test
+   void backsOffWhenTheApplicationDeclaresItsOwnFailureProblemMapper()
+   {
+      runner.withUserConfiguration(CustomFailureProblemMapperConfiguration.class)
+         .run(context -> {
+            assertThat(context).hasSingleBean(FailureProblemMapper.class);
+            assertThat(context.getBean(FailureProblemMapper.class))
+               .isSameAs(context.getBean("customFailureProblemMapper"));
+            assertThat(context).hasSingleBean(RestControllerAdapterMethodInvoker.class);
+         });
+   }
+
+   @Configuration(proxyBeanMethods = false)
+   static class CustomFailureProblemMapperConfiguration
+   {
+      @Bean
+      FailureProblemMapper customFailureProblemMapper()
+      {
+         return (code, errors, request) ->
+            ProblemDetail.forStatus(418, "I'm a teapot", code.description(), request.path(), code.code());
+      }
    }
 
    @Test

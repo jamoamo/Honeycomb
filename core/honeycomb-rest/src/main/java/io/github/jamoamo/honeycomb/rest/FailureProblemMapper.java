@@ -24,27 +24,36 @@
 package io.github.jamoamo.honeycomb.rest;
 
 import io.github.jamoamo.honeycomb.rest.request.RestRequest;
-import io.github.jamoamo.honeycomb.rest.response.RestResponse;
-import io.github.jamoamo.honeycomb.usecase.UseCaseResult;
+import io.github.jamoamo.honeycomb.rest.response.FieldError;
+import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
+import io.github.jamoamo.honeycomb.types.ErrorCode;
+
+import java.util.List;
 
 /**
- * Maps a {@link UseCaseResult} returned by a rest controller adapter method to a {@link RestResponse}, using the
- * standard mapping in {@link UseCaseResponses}.
+ * Maps a failure returned by an endpoint as an {@link EndpointResult.Failed} to the {@link ProblemDetail} the
+ * response is written with.
+ *
+ * <p>
+ * This is the single place that decides how error codes surface over HTTP: the status, title and client-facing
+ * detail. {@link DefaultFailureProblemMapper} derives them from the error code's
+ * {@link io.github.jamoamo.honeycomb.types.ErrorCategory ErrorCategory}; supply another implementation to the
+ * {@link RestControllerAdapterMethodInvoker} to change that, for example to map specific error codes differently.
+ * </p>
  *
  * @author James Amoore
  * @since 1.1.0
  */
-final class UseCaseResultMapper
+@FunctionalInterface
+public interface FailureProblemMapper
 {
    /**
-    * Maps the use case result.
+    * Maps the failure to a problem detail.
     *
-    * @param result  the result to map
-    * @param request the request being handled
-    * @return the response
+    * @param errorCode the error code identifying the failure
+    * @param errors    the field-level errors of the failure, empty unless it was a validation failure
+    * @param request   the request being handled
+    * @return the problem detail; never {@code null}
     */
-   RestResponse map(final UseCaseResult<?> result, final RestRequest request)
-   {
-      return UseCaseResponses.toRestResponse(result, request.path(), request.method() + " " + request.path());
-   }
+   ProblemDetail map(ErrorCode errorCode, List<FieldError> errors, RestRequest request);
 }

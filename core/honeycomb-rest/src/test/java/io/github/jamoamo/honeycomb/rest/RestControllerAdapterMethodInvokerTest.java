@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -125,22 +126,67 @@ public class RestControllerAdapterMethodInvokerTest
          throw new StackOverflowError("fatal");
       }
 
-      public UseCaseResult<String> useCaseSuccess()
+      public EndpointResult<String> useCaseSuccess()
       {
-         return UseCaseResult.success("done");
+         return EndpointResult.from(UseCaseResult.success("done"), String::toUpperCase);
       }
 
-      public UseCaseResult<String> useCaseValidationFailure()
+      public EndpointResult<String> useCaseValidationFailure()
       {
-         return UseCaseResult.failure(
-            new ErrorCode("VALIDATION_FAILED", ErrorCategory.VALIDATION, "Rejected the input."),
-            List.of(new ValidationError("name", "must not be blank")));
+         return EndpointResult.from(
+            UseCaseResult.<String>failure(
+               new ErrorCode("VALIDATION_FAILED", ErrorCategory.VALIDATION, "Rejected the input."),
+               List.of(new ValidationError("name", "must not be blank"))),
+            out -> out);
       }
 
-      public UseCaseResult<String> useCaseInternalFailure()
+      public EndpointResult<String> useCaseInternalFailure()
       {
-         return UseCaseResult.failure(
-            new ErrorCode("UNHANDLED_ERROR", ErrorCategory.INTERNAL, "Failed: internal secret"));
+         return EndpointResult.from(
+            UseCaseResult.<String>failure(
+               new ErrorCode("UNHANDLED_ERROR", ErrorCategory.INTERNAL, "Failed: internal secret")),
+            out -> out);
+      }
+
+      public EndpointResult<String> created()
+      {
+         return EndpointResult.respond(
+            UseCaseResult.success("thing"),
+            out -> EndpointResult.created(out, URI.create("/things/1")));
+      }
+
+      public EndpointResult<String> noContent()
+      {
+         return EndpointResult.<String>noContent().withHeader("X-Trace", "abc");
+      }
+
+      public EndpointResult<String> endpointProblem()
+      {
+         return EndpointResult.<String>problem(CONFLICT).withHeader("Retry-After", "5");
+      }
+
+      public EndpointResult<String> rateLimited()
+      {
+         return EndpointResult.<String>failed(new ErrorCode("SLOW_DOWN", ErrorCategory.RATE_LIMITED, "Slow down."))
+            .withHeader("Retry-After", "30");
+      }
+
+      public EndpointResult<ApiResponse<String>> okWithApiResponse()
+      {
+         return EndpointResult.ok(CUSTOM_RESPONSE);
+      }
+
+      public Object useCaseResultAsObject()
+      {
+         return UseCaseResult.success("leaked");
+      }
+   }
+
+   public static final class UseCaseResultAdapter
+   {
+      public UseCaseResult<String> leaks()
+      {
+         return UseCaseResult.success("leaked");
       }
    }
 
@@ -185,17 +231,23 @@ public class RestControllerAdapterMethodInvokerTest
    }
 
    @Test
-   @DisplayName("returns an ApiResponse result as-is")
+   @DisplayName("writes an ApiResponse result as-is with a 200 status")
    public void testReturnsApiResponseAsIs()
    {
-      assertThat(invoke("apiResponse")).isSameAs(CUSTOM_RESPONSE);
+      RestResponse response = invoke("apiResponse");
+
+      assertThat(response.status()).isEqualTo(200);
+      assertThat(response.body()).containsSame(CUSTOM_RESPONSE);
    }
 
    @Test
-   @DisplayName("returns a ProblemDetail result as-is")
+   @DisplayName("writes a ProblemDetail result as-is with its status")
    public void testReturnsProblemDetailAsIs()
    {
-      assertThat(invoke("problem")).isSameAs(NOT_FOUND);
+      RestResponse response = invoke("problem");
+
+      assertThat(response.status()).isEqualTo(404);
+      assertThat(response.body()).containsSame(NOT_FOUND);
    }
 
    @Test
@@ -242,14 +294,106 @@ public class RestControllerAdapterMethodInvokerTest
          List.of(resolverThrowing(new ProblemDetailException(CONFLICT))));
 
       assertThat(throwing.invokeRestControllerAdapterMethod(
-         match("echo", Map.of()), new FakeRestRequest("POST", "/echo"))).isSameAs(CONFLICT);
+         match("echo", Map.of()), new FakeRestRequest("POST", "/echo")).body()).containsSame(CONFLICT);
    }
 
    @Test
-   @DisplayName("maps a successful use case result to an ApiResponse carrying its output")
+   @DisplayName("writes a successful endpoint result as a 200 ApiResponse carrying the mapped output")
    public void testUseCaseSuccessMapsToApiResponse()
    {
-      assertThat(apiResponse(invoke("useCaseSuccess")).data().orElseThrow()).isEqualTo("done");
+      RestResponse response = invoke("useCaseSuccess");
+
+      assertThat(response.status()).isEqualTo(200);
+      assertThat(apiResponse(response).data().orElseThrow()).isEqualTo("DONE");
+   }
+
+   @Test
+   @DisplayName("writes a created endpoint result as a 201 with a Location header")
+   public void testCreatedEndpointResult()
+   {
+      RestResponse response = invoke("created");
+
+      assertThat(response.status()).isEqualTo(201);
+      assertThat(response.headers()).containsEntry("Location", List.of("/things/1"));
+      assertThat(apiResponse(response).data().orElseThrow()).isEqualTo("thing");
+   }
+
+   @Test
+   @DisplayName("writes a no content endpoint result as a 204 without a body, keeping its headers")
+   public void testNoContentEndpointResult()
+   {
+      RestResponse response = invoke("noContent");
+
+      assertThat(response.status()).isEqualTo(204);
+      assertThat(response.body()).isEmpty();
+      assertThat(response.headers()).containsEntry("X-Trace", List.of("abc"));
+   }
+
+   @Test
+   @DisplayName("writes a problem endpoint result as its problem, keeping its headers")
+   public void testProblemEndpointResult()
+   {
+      RestResponse response = invoke("endpointProblem");
+
+      assertThat(response.status()).isEqualTo(409);
+      assertThat(response.body()).containsSame(CONFLICT);
+      assertThat(response.headers()).containsEntry("Retry-After", List.of("5"));
+   }
+
+   @Test
+   @DisplayName("writes a failed endpoint result through the failure mapper, keeping its headers")
+   public void testFailedEndpointResultKeepsHeaders()
+   {
+      RestResponse response = invoke("rateLimited");
+
+      assertThat(response.status()).isEqualTo(429);
+      assertThat(problemDetail(response).code()).isEqualTo("SLOW_DOWN");
+      assertThat(response.headers()).containsEntry("Retry-After", List.of("30"));
+   }
+
+   @Test
+   @DisplayName("writes an ApiResponse body of an ok endpoint result as-is")
+   public void testOkEndpointResultWithApiResponseBody()
+   {
+      assertThat(invoke("okWithApiResponse").body()).containsSame(CUSTOM_RESPONSE);
+   }
+
+   @Test
+   @DisplayName("maps failed endpoint results with the configured failure mapper")
+   public void testCustomFailureMapper()
+   {
+      FailureProblemMapper teapot = (code, errors, request) ->
+         ProblemDetail.forStatus(418, "I'm a teapot", code.code(), request.path(), code.code());
+      RestControllerAdapterMethodInvoker custom =
+         new RestControllerAdapterMethodInvoker(JsonMapper.builder().build(), teapot);
+
+      RestResponse response = custom.invokeRestControllerAdapterMethod(
+         match("useCaseValidationFailure", Map.of()), new FakeRestRequest("GET", "/useCaseValidationFailure"));
+
+      assertThat(response.status()).isEqualTo(418);
+      assertThat(problemDetail(response).detail()).isEqualTo("VALIDATION_FAILED");
+   }
+
+   @Test
+   @DisplayName("answers a UseCaseResult returned at runtime with a generic 500 instead of mapping it")
+   public void testUseCaseResultReturnedAtRuntimeMapsTo500()
+   {
+      ProblemDetail problem = problemDetail(invoke("useCaseResultAsObject"));
+
+      assertThat(problem.status()).isEqualTo(500);
+      assertThat(problem.detail()).isEqualTo(ExceptionProblemDetailMapper.INTERNAL_SERVER_ERROR_DETAIL);
+      assertThat(problem.errorId()).isNotBlank();
+   }
+
+   @Test
+   @DisplayName("rejects a handler method declaring a UseCaseResult return type")
+   public void testHandlerMethodRejectsUseCaseResultReturnType() throws NoSuchMethodException
+   {
+      Method leaks = UseCaseResultAdapter.class.getMethod("leaks");
+
+      assertThatExceptionOfType(IllegalArgumentException.class)
+         .isThrownBy(() -> new HandlerMethod(new UseCaseResultAdapter(), leaks))
+         .withMessageContaining("EndpointResult");
    }
 
    @Test
@@ -291,7 +435,7 @@ public class RestControllerAdapterMethodInvokerTest
    @DisplayName("returns the problem detail carried by a ProblemDetailException as-is")
    public void testProblemDetailExceptionReturnsCarriedProblem()
    {
-      assertThat(invoke("problemException")).isSameAs(CONFLICT);
+      assertThat(invoke("problemException").body()).containsSame(CONFLICT);
    }
 
    @Test
@@ -388,14 +532,16 @@ public class RestControllerAdapterMethodInvokerTest
 
    private static ApiResponse<?> apiResponse(final RestResponse response)
    {
-      assertThat(response).isInstanceOf(ApiResponse.class);
-      return (ApiResponse<?>) response;
+      assertThat(response.body()).containsInstanceOf(ApiResponse.class);
+      return (ApiResponse<?>) response.body().orElseThrow();
    }
 
    private static ProblemDetail problemDetail(final RestResponse response)
    {
-      assertThat(response).isInstanceOf(ProblemDetail.class);
-      return (ProblemDetail) response;
+      assertThat(response.body()).containsInstanceOf(ProblemDetail.class);
+      ProblemDetail problem = (ProblemDetail) response.body().orElseThrow();
+      assertThat(response.status()).isEqualTo(problem.status());
+      return problem;
    }
 
    private static AdapterArgumentResolver<ArgumentResolutionContext> resolverThrowing(final RuntimeException ex)

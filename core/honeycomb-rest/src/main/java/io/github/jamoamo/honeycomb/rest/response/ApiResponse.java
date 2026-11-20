@@ -23,8 +23,6 @@
  */
 package io.github.jamoamo.honeycomb.rest.response;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 import java.util.Objects;
 import java.util.Optional;
 
@@ -38,10 +36,8 @@ import java.util.Optional;
  * @param <T>  the type of the data
  * @since 1.0.0
  */
-public record ApiResponse<T>(Optional<T> data, Optional<ResponseMetaData> meta) implements RestResponse
+public record ApiResponse<T>(Optional<T> data, Optional<ResponseMetaData> meta) implements RestResponseBody
 {
-   private static final int STATUS_OK = 200;
-
    /**
     * Constructor.
     */
@@ -49,19 +45,6 @@ public record ApiResponse<T>(Optional<T> data, Optional<ResponseMetaData> meta) 
    {
       data = Objects.requireNonNull(data);
       meta = Objects.requireNonNull(meta);
-   }
-
-   /**
-    * A successful response is always written with {@code 200 OK}.
-    *
-    * @return {@code 200}
-    * @since 1.1.0
-    */
-   @Override
-   @JsonIgnore
-   public int status()
-   {
-      return STATUS_OK;
    }
 
    /**

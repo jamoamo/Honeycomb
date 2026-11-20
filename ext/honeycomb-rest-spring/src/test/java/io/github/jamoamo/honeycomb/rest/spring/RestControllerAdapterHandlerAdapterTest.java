@@ -23,6 +23,7 @@
  */
 package io.github.jamoamo.honeycomb.rest.spring;
 
+import io.github.jamoamo.honeycomb.rest.EndpointResult;
 import io.github.jamoamo.honeycomb.rest.HandlerMethod;
 import io.github.jamoamo.honeycomb.rest.ProblemDetailException;
 import io.github.jamoamo.honeycomb.rest.RestControllerAdapterMethodInvoker;
@@ -40,6 +41,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.lang.reflect.Method;
+import java.net.URI;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -79,11 +81,53 @@ public class RestControllerAdapterHandlerAdapterTest
             ProblemDetail.forStatus(409, "Conflict", "Already exists.", "/conflict", "THING_EXISTS"));
       }
 
-      public UseCaseResult<String> useCaseNotFound()
+      public EndpointResult<String> useCaseNotFound()
       {
-         return UseCaseResult.failure(
-            new ErrorCode("WIDGET_NOT_FOUND", ErrorCategory.NOT_FOUND, "No such widget."));
+         return EndpointResult.from(
+            UseCaseResult.<String>failure(
+               new ErrorCode("WIDGET_NOT_FOUND", ErrorCategory.NOT_FOUND, "No such widget.")),
+            out -> out);
       }
+
+      public EndpointResult<String> created()
+      {
+         return EndpointResult.created("made", URI.create("/widgets/1"));
+      }
+
+      public EndpointResult<String> removed()
+      {
+         return EndpointResult.<String>noContent().withHeader("X-Trace", "abc");
+      }
+   }
+
+   @Test
+   @DisplayName("writes a created endpoint result with its status, headers and body")
+   public void testWritesCreated() throws Exception
+   {
+      MockHttpServletRequest request = new MockHttpServletRequest("POST", "/created");
+      MockHttpServletResponse response = new MockHttpServletResponse();
+
+      adapter.handle(request, response, match("created"));
+
+      assertThat(response.getStatus()).isEqualTo(201);
+      assertThat(response.getHeader("Location")).isEqualTo("/widgets/1");
+      assertThat(response.getContentType()).isEqualTo("application/json");
+      assertThat(response.getContentAsString()).contains("\"data\":\"made\"");
+   }
+
+   @Test
+   @DisplayName("writes a no content endpoint result with its headers and no body")
+   public void testWritesNoContent() throws Exception
+   {
+      MockHttpServletRequest request = new MockHttpServletRequest("DELETE", "/removed");
+      MockHttpServletResponse response = new MockHttpServletResponse();
+
+      adapter.handle(request, response, match("removed"));
+
+      assertThat(response.getStatus()).isEqualTo(204);
+      assertThat(response.getHeader("X-Trace")).isEqualTo("abc");
+      assertThat(response.getContentType()).isNull();
+      assertThat(response.getContentAsString()).isEmpty();
    }
 
    @Test

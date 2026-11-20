@@ -50,7 +50,7 @@ public record ProblemDetail(
    String code,
    String errorId,
    List<FieldError> errors)
-   implements RestResponse
+   implements RestResponseBody
 {
    /**
     * The problem type used when no specific type is supplied.

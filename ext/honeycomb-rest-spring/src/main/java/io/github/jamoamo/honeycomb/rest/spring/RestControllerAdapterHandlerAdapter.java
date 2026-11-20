@@ -28,6 +28,7 @@ import io.github.jamoamo.honeycomb.rest.RouteMatch;
 import io.github.jamoamo.honeycomb.rest.response.ApiResponse;
 import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
 import io.github.jamoamo.honeycomb.rest.response.RestResponse;
+import io.github.jamoamo.honeycomb.rest.response.RestResponseBody;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -41,9 +42,10 @@ import tools.jackson.databind.ObjectMapper;
  * {@link RestControllerAdapterHandlerMapping}.
  *
  * <p>
- * The invoker's {@link RestResponse} is written with its {@link RestResponse#status() status}: an
- * {@link ApiResponse} as {@code application/json} and a {@link ProblemDetail} as
- * {@code application/problem+json}, so that every endpoint surfaces errors in the same shape.
+ * The invoker's {@link RestResponse} is written with its {@link RestResponse#status() status} and
+ * {@link RestResponse#headers() headers}. Its body, when present, is written as {@code application/json} for an
+ * {@link ApiResponse} and as {@code application/problem+json} for a {@link ProblemDetail}, so that every endpoint
+ * surfaces errors in the same shape; a response without a body, such as {@code 204 No Content}, is written empty.
  * </p>
  *
  * @author James Amoore
@@ -94,12 +96,17 @@ public final class RestControllerAdapterHandlerAdapter implements HandlerAdapter
       RestResponse result = invoker.invokeRestControllerAdapterMethod((RouteMatch) handler, request);
 
       res.setStatus(result.status());
-      res.setContentType(switch (result)
+      result.headers().forEach((name, values) -> values.forEach(value -> res.addHeader(name, value)));
+      if (result.body().isPresent())
       {
-         case ApiResponse<?> response -> MediaType.APPLICATION_JSON_VALUE;
-         case ProblemDetail problem -> MediaType.APPLICATION_PROBLEM_JSON_VALUE;
-      });
-      objectMapper.writeValue(res.getOutputStream(), result);
+         RestResponseBody body = result.body().get();
+         res.setContentType(switch (body)
+         {
+            case ApiResponse<?> response -> MediaType.APPLICATION_JSON_VALUE;
+            case ProblemDetail problem -> MediaType.APPLICATION_PROBLEM_JSON_VALUE;
+         });
+         objectMapper.writeValue(res.getOutputStream(), body);
+      }
       return null;
    }
 }

@@ -23,10 +23,18 @@
  */
 package io.github.jamoamo.honeycomb.rest;
 
+import io.github.jamoamo.honeycomb.usecase.UseCaseResult;
+
 import java.lang.reflect.Method;
 
 /**
  * Represents a method that handles a request.
+ *
+ * <p>
+ * A handler method may not declare a {@link UseCaseResult} return type: a use case result belongs to the
+ * application layer, so endpoints convert it to an {@link EndpointResult} instead. Rejecting such a method here
+ * surfaces the mistake when routes are registered rather than when a request is first handled.
+ * </p>
  *
  * @author James Amoore
  * @param bean   the adapter instance the method belongs to
@@ -35,5 +43,18 @@ import java.lang.reflect.Method;
  */
 public record HandlerMethod(Object bean, Method method)
 {
-
+   /**
+    * Constructor.
+    *
+    * @throws IllegalArgumentException if the method declares a {@link UseCaseResult} return type
+    */
+   public HandlerMethod
+   {
+      if (method != null && UseCaseResult.class.isAssignableFrom(method.getReturnType()))
+      {
+         throw new IllegalArgumentException("Handler method " + method + " returns a UseCaseResult; "
+            + "convert it with EndpointResult.from(...) or EndpointResult.respond(...) and return the "
+            + "EndpointResult instead");
+      }
+   }
 }

@@ -180,35 +180,63 @@ return result.fold(
 ## Declaring a REST adapter
 
 An incoming REST boundary is a plain class annotated with `@RestControllerAdapter`; its `@Endpoint` methods bind
-path variables, query parameters and the request body, call the use case, and return a value that is wrapped in a
-consistent `ApiResponse` envelope. Binding failures surface as a `400` and handling failures as a `500`, both as
-RFC 9457 `ProblemDetail` documents with the `application/problem+json` media type.
+path variables, query parameters and the request body, call the use case, and return an `EndpointResult`: either
+a successful response body, written in a consistent `ApiResponse` envelope, or an error, written as an RFC 9457
+`ProblemDetail` document with the `application/problem+json` media type. Binding failures surface as a `400` and
+unexpected handling failures as a `500`, also as problem details.
 
 ```java
 @RestControllerAdapter(version = "v1", apiPath = "/users")
 public final class UserRestAdapter
 {
    private final FindUserUseCase findUser;
+   private final RegisterUserUseCase registerUser;
 
-   public UserRestAdapter(final FindUserUseCase findUser)
+   public UserRestAdapter(final FindUserUseCase findUser, final RegisterUserUseCase registerUser)
    {
       this.findUser = findUser;
+      this.registerUser = registerUser;
    }
 
    @Endpoint(path = "/{id}", method = HttpVerb.GET)
-   public UserResponse find(@PathVariable("id") final UUID id, @QueryParam(value = "expand", required = false) final String expand)
+   public EndpointResult<UserResponse> find(@PathVariable("id") final UUID id)
    {
-      return findUser.execute(new FindUserInput(id, expand)).fold(this::toResponse, this::surface);
+      return EndpointResult.from(findUser.execute(new FindUserInput(id)), UserResponse::of);
+   }
+
+   @Endpoint(path = "/", method = HttpVerb.POST)
+   public EndpointResult<UserResponse> register(final RegisterUserRequest request)
+   {
+      return EndpointResult.respond(
+         registerUser.execute(request.toInput()),
+         user -> EndpointResult.created(UserResponse.of(user), URI.create("/api/v1/users/" + user.id())));
    }
 }
 ```
 
-The adapter above is registered at `GET /api/v1/users/{id}`; `fullPath` replaces the `/api/{version}{apiPath}`
-prefix entirely when set.
+The adapter above is registered at `GET /api/v1/users/{id}` and `POST /api/v1/users/`; `fullPath` replaces the
+`/api/{version}{apiPath}` prefix entirely when set.
+
+`EndpointResult.from` turns a use case success into a `200 OK` carrying the mapped output, and a failure into an
+error identified by its `ErrorCode`. `EndpointResult.respond` does the same but lets the success choose its own
+result, such as `created(body, location)`, `accepted(body)` or `noContent()`. Any result can carry extra headers
+with `withHeader(name, value)`, and an endpoint can return `EndpointResult.problem(...)` or
+`EndpointResult.failed(errorCode)` directly when the error does not come from a use case.
+
+Use case types stay out of the API layer: a `UseCaseResult` is only ever an argument to `from` or `respond`. A
+handler method that declares a `UseCaseResult` return type is rejected when its routes are registered.
+
+Errors identified by an `ErrorCode` are turned into problem details by a single `FailureProblemMapper`. The default,
+`DefaultFailureProblemMapper`, derives the status from the error category (`VALIDATION` is `400`, `NOT_FOUND` is
+`404`, `CONFLICT` is `409`, `INTERNAL` is `500` and so on), uses the error code description as the detail and
+carries any validation errors as field errors. Server-side failures report a generic detail and an error id
+instead of the description, which is logged against that id. Pass your own mapper to the
+`RestControllerAdapterMethodInvoker`, or declare it as a bean with the Spring Boot starter, to change how error
+codes surface over HTTP.
 
 On Spring Boot, depend on `honeycomb-starter-web` instead of `honeycomb-rest-spring` and there is nothing to
 wire — the starter auto-configures the handler mapping and handler adapter (along with the route template
-parser and the method invoker they need) in every servlet web application:
+parser, the method invoker and the `FailureProblemMapper` they need) in every servlet web application:
 
 ```xml
 <dependency>
