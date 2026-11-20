@@ -43,6 +43,9 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Invoker for methods on a rest controller adapter.
@@ -58,9 +61,11 @@ import java.util.List;
  */
 public final class RestControllerAdapterMethodInvoker
 {
+   private static final int NO_CONTENT = 204;
+
    private final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers;
    private final ExceptionProblemDetailMapper exceptionMapper;
-   private final UseCaseResultMapper useCaseResultMapper;
+   private final FailureProblemMapper failureMapper;
 
    /**
     * Constructor using the default argument resolvers.
@@ -73,6 +78,20 @@ public final class RestControllerAdapterMethodInvoker
    }
 
    /**
+    * Constructor using the default argument resolvers.
+    *
+    * @param objectMapper  the object mapper used to deserialize request bodies
+    * @param failureMapper the mapper used to turn {@link EndpointResult.Failed} results into problem details
+    * @since 1.1.0
+    */
+   public RestControllerAdapterMethodInvoker(
+      final ObjectMapper objectMapper,
+      final FailureProblemMapper failureMapper)
+   {
+      this(defaultResolvers(objectMapper), failureMapper);
+   }
+
+   /**
     * Constructor.
     *
     * @param argumentResolvers the ordered resolvers used to bind handler-method parameters; the first
@@ -81,7 +100,22 @@ public final class RestControllerAdapterMethodInvoker
    public RestControllerAdapterMethodInvoker(
       final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers)
    {
-      this(argumentResolvers, new ExceptionProblemDetailMapper());
+      this(argumentResolvers, new DefaultFailureProblemMapper());
+   }
+
+   /**
+    * Constructor.
+    *
+    * @param argumentResolvers the ordered resolvers used to bind handler-method parameters; the first
+    *        resolver that supports a parameter resolves it, so a catch-all body resolver should be last
+    * @param failureMapper     the mapper used to turn {@link EndpointResult.Failed} results into problem details
+    * @since 1.1.0
+    */
+   public RestControllerAdapterMethodInvoker(
+      final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers,
+      final FailureProblemMapper failureMapper)
+   {
+      this(argumentResolvers, new ExceptionProblemDetailMapper(), failureMapper);
    }
 
    /**
@@ -89,14 +123,16 @@ public final class RestControllerAdapterMethodInvoker
     *
     * @param argumentResolvers the ordered resolvers used to bind handler-method parameters
     * @param exceptionMapper   the mapper used to turn exceptions into problem details
+    * @param failureMapper     the mapper used to turn failed endpoint results into problem details
     */
    RestControllerAdapterMethodInvoker(
       final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers,
-      final ExceptionProblemDetailMapper exceptionMapper)
+      final ExceptionProblemDetailMapper exceptionMapper,
+      final FailureProblemMapper failureMapper)
    {
       this.argumentResolvers = List.copyOf(argumentResolvers);
       this.exceptionMapper = exceptionMapper;
-      this.useCaseResultMapper = new UseCaseResultMapper();
+      this.failureMapper = Objects.requireNonNull(failureMapper, "failureMapper cannot be null");
    }
 
    /**
@@ -106,9 +142,14 @@ public final class RestControllerAdapterMethodInvoker
     * The handler result is converted as follows:
     * </p>
     * <ul>
-    * <li>an {@link ApiResponse} or {@link ProblemDetail} is returned as-is;</li>
-    * <li>a {@link UseCaseResult} is mapped: a success to an {@link ApiResponse} carrying its output, a failure to
-    * a {@link ProblemDetail} whose status is derived from the failure's error category;</li>
+    * <li>an {@link EndpointResult} is written with its status and headers: an {@link EndpointResult.Ok} as an
+    * {@link ApiResponse} carrying its body (no body for {@code 204}), an {@link EndpointResult.Problem} as its
+    * problem, and an {@link EndpointResult.Failed} as the problem the configured {@link FailureProblemMapper}
+    * maps it to;</li>
+    * <li>a {@link RestResponse} is returned as-is, and an {@link ApiResponse} or {@link ProblemDetail} is written
+    * as the body of a response with the matching status;</li>
+    * <li>a {@link UseCaseResult} is not mapped: endpoints must convert it to an {@link EndpointResult}, so a
+    * handler that returns one at runtime is answered with a generic {@code 500};</li>
     * <li>anything else, including {@code null} or a {@code void} method, is wrapped in an {@link ApiResponse}.</li>
     * </ul>
     * <p>
@@ -134,7 +175,7 @@ public final class RestControllerAdapterMethodInvoker
          Object[] args = resolveArguments(handlerMethod, context);
          Object result = handlerMethod.invoke(match.handler().bean(), args);
 
-         return toResponse(result, request);
+         return toResponse(result, request, handlerMethod);
       }
       catch (final InvocationTargetException ex)
       {
@@ -143,7 +184,7 @@ public final class RestControllerAdapterMethodInvoker
          {
             throw error;
          }
-         return exceptionMapper.map(cause, request);
+         return RestResponse.problem(exceptionMapper.map(cause, request));
       }
       catch (final MissingArgumentResolverException ex)
       {
@@ -152,18 +193,45 @@ public final class RestControllerAdapterMethodInvoker
       }
       catch (final RuntimeException | IOException | IllegalAccessException ex)
       {
-         return exceptionMapper.map(ex, request);
+         return RestResponse.problem(exceptionMapper.map(ex, request));
       }
    }
 
-   private RestResponse toResponse(final Object result, final RestRequest request)
+   private RestResponse toResponse(final Object result, final RestRequest request, final Method handlerMethod)
    {
       return switch (result)
       {
+         case EndpointResult<?> endpointResult -> toResponse(endpointResult, request);
          case RestResponse response -> response;
-         case UseCaseResult<?> useCaseResult -> useCaseResultMapper.map(useCaseResult, request);
-         case null, default -> ApiResponse.of(result);
+         case ApiResponse<?> body -> RestResponse.ok(body);
+         case ProblemDetail problem -> RestResponse.problem(problem);
+         case UseCaseResult<?> useCaseResult -> RestResponse.problem(exceptionMapper.internalServerError(
+            "Handler method " + handlerMethod + " returned a UseCaseResult handling request " + request.method()
+               + " " + request.path() + "; endpoints must return an EndpointResult instead",
+            null,
+            request));
+         case null, default -> RestResponse.ok(ApiResponse.of(result));
       };
+   }
+
+   private RestResponse toResponse(final EndpointResult<?> result, final RestRequest request)
+   {
+      RestResponse response = switch (result)
+      {
+         case EndpointResult.Ok<?> ok when ok.status() == NO_CONTENT ->
+            new RestResponse(ok.status(), Map.of(), Optional.empty());
+         case EndpointResult.Ok<?> ok -> new RestResponse(ok.status(), Map.of(), Optional.of(body(ok.body())));
+         case EndpointResult.Problem<?> problem -> RestResponse.problem(problem.problem());
+         case EndpointResult.Failed<?> failed -> RestResponse.problem(Objects.requireNonNull(
+            failureMapper.map(failed.errorCode(), failed.errors(), request),
+            "failureMapper cannot return null"));
+      };
+      return response.withHeaders(result.headers());
+   }
+
+   private static ApiResponse<?> body(final Object body)
+   {
+      return body instanceof ApiResponse<?> response ? response : ApiResponse.of(body);
    }
 
    private Object[] resolveArguments(final Method handlerMethod, final ArgumentResolutionContext context)

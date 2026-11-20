@@ -23,26 +23,132 @@
  */
 package io.github.jamoamo.honeycomb.rest.response;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+
 /**
- * The outcome of invoking a rest controller adapter method: either a successful {@link ApiResponse} or a
- * {@link ProblemDetail} describing an error.
+ * The HTTP response a rest controller adapter method produces: a status, headers and an optional body.
  *
  * <p>
- * The set of response types is deliberately closed so that hosting modules can switch over it exhaustively.
- * Hosts should write the response with the HTTP status given by {@link #status()}: {@code 200} for an
- * {@link ApiResponse} and the problem's own status for a {@link ProblemDetail}, using the
- * {@code application/problem+json} media type for the latter.
+ * The body is an {@link ApiResponse} for a successful response, a {@link ProblemDetail} for an error, or absent
+ * for a response that carries no content such as {@code 204 No Content}.
  * </p>
  *
  * @author James Amoore
+ * @param status  the HTTP status code the response is written with
+ * @param headers the response headers, by name; never {@code null}
+ * @param body    the response body, empty when the response carries no content
  * @since 1.1.0
  */
-public sealed interface RestResponse permits ApiResponse, ProblemDetail
+public record RestResponse(int status, Map<String, List<String>> headers, Optional<RestResponseBody> body)
 {
+   private static final int STATUS_OK = 200;
+   private static final int STATUS_NO_CONTENT = 204;
+
    /**
-    * The HTTP status code the response should be written with.
-    *
-    * @return the HTTP status code
+    * Constructor.
     */
-   int status();
+   public RestResponse
+   {
+      headers = copyHeaders(headers);
+      body = Objects.requireNonNull(body, "body cannot be null");
+   }
+
+   /**
+    * A {@code 200 OK} response carrying the supplied body.
+    *
+    * @param body the body
+    * @return the response
+    */
+   public static RestResponse ok(final ApiResponse<?> body)
+   {
+      return new RestResponse(STATUS_OK, Map.of(), Optional.of(Objects.requireNonNull(body, "ok body cannot be null")));
+   }
+
+   /**
+    * An error response carrying the supplied problem, written with the problem's status.
+    *
+    * @param problem the problem
+    * @return the response
+    */
+   public static RestResponse problem(final ProblemDetail problem)
+   {
+      Objects.requireNonNull(problem, "problem cannot be null");
+      return new RestResponse(problem.status(), Map.of(), Optional.of(problem));
+   }
+
+   /**
+    * A {@code 204 No Content} response.
+    *
+    * @return the response
+    */
+   public static RestResponse noContent()
+   {
+      return new RestResponse(STATUS_NO_CONTENT, Map.of(), Optional.empty());
+   }
+
+   /**
+    * Returns a copy of this response with the supplied header value added.
+    *
+    * @param name  the header name
+    * @param value the header value
+    * @return the copy
+    */
+   public RestResponse withHeader(final String name, final String value)
+   {
+      return new RestResponse(status, addHeader(headers, name, value), body);
+   }
+
+   /**
+    * Returns a copy of this response with the supplied headers added.
+    *
+    * @param additional the headers to add, by name
+    * @return the copy
+    */
+   public RestResponse withHeaders(final Map<String, List<String>> additional)
+   {
+      Map<String, List<String>> merged = headers;
+      for (Map.Entry<String, List<String>> entry : copyHeaders(additional).entrySet())
+      {
+         for (String value : entry.getValue())
+         {
+            merged = addHeader(merged, entry.getKey(), value);
+         }
+      }
+      return new RestResponse(status, merged, body);
+   }
+
+   private static String requireHeaderName(final String name)
+   {
+      return Objects.requireNonNull(name, "header name cannot be null");
+   }
+
+   private static Map<String, List<String>> addHeader(
+      final Map<String, List<String>> headers,
+      final String name,
+      final String value)
+   {
+      requireHeaderName(name);
+      Objects.requireNonNull(value, "header value cannot be null");
+      Map<String, List<String>> copy = new LinkedHashMap<>(headers);
+      List<String> values = new ArrayList<>(copy.getOrDefault(name, List.of()));
+      values.add(value);
+      copy.put(name, values);
+      return copy;
+   }
+
+   private static Map<String, List<String>> copyHeaders(final Map<String, List<String>> headers)
+   {
+      Objects.requireNonNull(headers, "headers cannot be null");
+      Map<String, List<String>> copy = new LinkedHashMap<>();
+      headers.forEach((name, values) -> copy.put(
+         requireHeaderName(name),
+         List.copyOf(Objects.requireNonNull(values, "header values cannot be null"))));
+      return Collections.unmodifiableMap(copy);
+   }
 }
