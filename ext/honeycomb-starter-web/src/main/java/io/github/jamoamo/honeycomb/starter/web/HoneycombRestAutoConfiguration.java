@@ -33,6 +33,11 @@ import io.github.jamoamo.honeycomb.rest.auth.AuthorizationPolicy;
 import io.github.jamoamo.honeycomb.rest.auth.BearerTokenExtractor;
 import io.github.jamoamo.honeycomb.rest.auth.CredentialExtractor;
 import io.github.jamoamo.honeycomb.rest.auth.TokenAuthenticator;
+import io.github.jamoamo.honeycomb.rest.idempotency.HeaderIdempotencyKeyResolver;
+import io.github.jamoamo.honeycomb.rest.idempotency.IdempotencyInterceptor;
+import io.github.jamoamo.honeycomb.rest.idempotency.IdempotencyKeyResolver;
+import io.github.jamoamo.honeycomb.rest.idempotency.IdempotencyStore;
+import io.github.jamoamo.honeycomb.rest.idempotency.InMemoryIdempotencyStore;
 import io.github.jamoamo.honeycomb.rest.intercept.EndpointInterceptor;
 import io.github.jamoamo.honeycomb.rest.spring.PathPatternTemplateParser;
 import io.github.jamoamo.honeycomb.rest.spring.RestControllerAdapterHandlerAdapter;
@@ -76,6 +81,61 @@ import tools.jackson.databind.ObjectMapper;
 @EnableConfigurationProperties({HoneycombRestProperties.class, HoneycombRestAuthProperties.class})
 public class HoneycombRestAutoConfiguration
 {
+   /**
+    * Makes {@code @Idempotent} endpoints idempotent, keyed by the {@code X-Idempotency-Key} header and recorded in
+    * memory by default; declare an {@link IdempotencyStore} bean to share keys across instances, or an
+    * {@link IdempotencyKeyResolver} bean to read keys from elsewhere.
+    *
+    * @author James Amoore
+    * @since 1.1.0
+    */
+   @Configuration(proxyBeanMethods = false)
+   public static class IdempotencyConfiguration
+   {
+      /**
+       * The default idempotency store, held in memory.
+       *
+       * @return the store
+       */
+      @Bean
+      @ConditionalOnMissingBean
+      public IdempotencyStore honeycombIdempotencyStore()
+      {
+         return new InMemoryIdempotencyStore();
+      }
+
+      /**
+       * The default idempotency key resolver, reading the {@code X-Idempotency-Key} header.
+       *
+       * @return the key resolver
+       */
+      @Bean
+      @ConditionalOnMissingBean
+      public IdempotencyKeyResolver honeycombIdempotencyKeyResolver()
+      {
+         return new HeaderIdempotencyKeyResolver();
+      }
+
+      /**
+       * The interceptor that makes {@code @Idempotent} endpoints idempotent.
+       *
+       * @param keyResolver  the key resolver
+       * @param store        the idempotency store
+       * @param objectMapper the object mapper used to serialize stored response bodies
+       * @return the interceptor
+       */
+      @Bean
+      @ConditionalOnMissingBean
+      @Order(IdempotencyInterceptor.ORDER)
+      public IdempotencyInterceptor honeycombIdempotencyInterceptor(
+         final IdempotencyKeyResolver keyResolver,
+         final IdempotencyStore store,
+         final ObjectMapper objectMapper)
+      {
+         return new IdempotencyInterceptor(keyResolver, store, objectMapper);
+      }
+   }
+
    /**
     * Secures every endpoint not marked {@code @PermitAll}, unless {@code honeycomb.rest.auth.enabled=false}.
     *
