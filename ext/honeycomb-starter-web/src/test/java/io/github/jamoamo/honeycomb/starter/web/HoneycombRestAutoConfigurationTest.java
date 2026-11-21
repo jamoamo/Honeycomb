@@ -25,9 +25,14 @@ package io.github.jamoamo.honeycomb.starter.web;
 
 import io.github.jamoamo.honeycomb.rest.DefaultFailureProblemMapper;
 import io.github.jamoamo.honeycomb.rest.FailureProblemMapper;
+import io.github.jamoamo.honeycomb.rest.HandlerMethod;
 import io.github.jamoamo.honeycomb.rest.PathTemplateParser;
 import io.github.jamoamo.honeycomb.rest.RestControllerAdapterMethodInvoker;
+import io.github.jamoamo.honeycomb.rest.RouteMatch;
+import io.github.jamoamo.honeycomb.rest.intercept.EndpointInterceptor;
+import io.github.jamoamo.honeycomb.rest.request.RestRequest;
 import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
+import io.github.jamoamo.honeycomb.rest.response.RestResponse;
 import io.github.jamoamo.honeycomb.rest.spring.PathPatternTemplateParser;
 import io.github.jamoamo.honeycomb.rest.spring.RestControllerAdapterHandlerAdapter;
 import io.github.jamoamo.honeycomb.rest.spring.RestControllerAdapterHandlerMapping;
@@ -39,10 +44,15 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -130,6 +140,86 @@ class HoneycombRestAutoConfigurationTest
                .isSameAs(context.getBean("customFailureProblemMapper"));
             assertThat(context).hasSingleBean(RestControllerAdapterMethodInvoker.class);
          });
+   }
+
+   @Test
+   void runsEndpointInterceptorBeansInOrder()
+   {
+      runner.withUserConfiguration(InterceptorConfiguration.class)
+         .run(context -> {
+            List<String> calls = context.getBean(InterceptorConfiguration.class).calls;
+            RouteMatch match = new RouteMatch(
+               new HandlerMethod(new Pinger(), Pinger.class.getMethod("ping")), Map.of());
+
+            RestResponse response = context.getBean(RestControllerAdapterMethodInvoker.class)
+               .invokeRestControllerAdapterMethod(match, new GetRequest());
+
+            assertThat(response.status()).isEqualTo(200);
+            assertThat(calls).containsExactly("first", "second", "handler");
+         });
+   }
+
+   public static final class Pinger
+   {
+      public String ping()
+      {
+         return "pong";
+      }
+   }
+
+   private static final class GetRequest implements RestRequest
+   {
+      @Override
+      public String method()
+      {
+         return "GET";
+      }
+
+      @Override
+      public String path()
+      {
+         return "/ping";
+      }
+
+      @Override
+      public List<String> queryParameterValues(final String name)
+      {
+         return List.of();
+      }
+
+      @Override
+      public InputStream body()
+      {
+         return InputStream.nullInputStream();
+      }
+   }
+
+   @Configuration(proxyBeanMethods = false)
+   static class InterceptorConfiguration
+   {
+      private final List<String> calls = new ArrayList<>();
+
+      @Bean
+      @Order(2)
+      EndpointInterceptor secondInterceptor()
+      {
+         return (invocation, chain) -> {
+            calls.add("second");
+            RestResponse response = chain.proceed(invocation);
+            calls.add("handler");
+            return response;
+         };
+      }
+
+      @Bean
+      @Order(1)
+      EndpointInterceptor firstInterceptor()
+      {
+         return (invocation, chain) -> {
+            calls.add("first");
+            return chain.proceed(invocation);
+         };
+      }
    }
 
    @Configuration(proxyBeanMethods = false)

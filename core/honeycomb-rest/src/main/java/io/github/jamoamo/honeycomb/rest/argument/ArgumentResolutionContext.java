@@ -23,9 +23,11 @@
  */
 package io.github.jamoamo.honeycomb.rest.argument;
 
+import io.github.jamoamo.honeycomb.rest.intercept.Attributes;
 import io.github.jamoamo.honeycomb.rest.request.RestRequest;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Per-request context passed to each {@link AdapterArgumentResolver}. Exposes the request together with the
@@ -38,17 +40,46 @@ public final class ArgumentResolutionContext
 {
    private final RestRequest request;
    private final Map<String, String> pathVariables;
+   private final Attributes attributes;
 
    /**
-    * Constructor.
+    * Constructor, with no attributes.
     *
     * @param request       the current request
     * @param pathVariables the path variables captured during route matching, keyed by variable name
     */
    public ArgumentResolutionContext(final RestRequest request, final Map<String, String> pathVariables)
    {
+      this(request, pathVariables, new Attributes());
+   }
+
+   /**
+    * Constructor.
+    *
+    * @param request       the current request
+    * @param pathVariables the path variables captured during route matching, keyed by variable name
+    * @param attributes    the per-request attributes populated by endpoint interceptors
+    * @since 1.1.0
+    */
+   public ArgumentResolutionContext(
+      final RestRequest request,
+      final Map<String, String> pathVariables,
+      final Attributes attributes)
+   {
       this.request = request;
       this.pathVariables = Map.copyOf(pathVariables);
+      this.attributes = Objects.requireNonNull(attributes, "attributes cannot be null");
+   }
+
+   /**
+    * The per-request attributes populated by endpoint interceptors, for example the authenticated principal.
+    *
+    * @return the attributes
+    * @since 1.1.0
+    */
+   public Attributes attributes()
+   {
+      return attributes;
    }
 
    /**

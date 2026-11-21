@@ -31,6 +31,9 @@ import io.github.jamoamo.honeycomb.rest.argument.HeaderParamArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.argument.PathVariableArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.argument.QueryParamArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.argument.RequestBodyArgumentResolver;
+import io.github.jamoamo.honeycomb.rest.intercept.Attributes;
+import io.github.jamoamo.honeycomb.rest.intercept.EndpointInterceptor;
+import io.github.jamoamo.honeycomb.rest.intercept.EndpointInvocation;
 import io.github.jamoamo.honeycomb.rest.request.RestRequest;
 import io.github.jamoamo.honeycomb.rest.response.ApiResponse;
 import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
@@ -67,6 +70,7 @@ public final class RestControllerAdapterMethodInvoker
    private final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers;
    private final ExceptionProblemDetailMapper exceptionMapper;
    private final FailureProblemMapper failureMapper;
+   private final List<EndpointInterceptor> interceptors;
 
    /**
     * Constructor using the default argument resolvers.
@@ -116,7 +120,40 @@ public final class RestControllerAdapterMethodInvoker
       final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers,
       final FailureProblemMapper failureMapper)
    {
-      this(argumentResolvers, new ExceptionProblemDetailMapper(), failureMapper);
+      this(argumentResolvers, failureMapper, List.of());
+   }
+
+   /**
+    * Constructor using the default argument resolvers.
+    *
+    * @param objectMapper  the object mapper used to deserialize request bodies
+    * @param failureMapper the mapper used to turn {@link EndpointResult.Failed} results into problem details
+    * @param interceptors  the interceptors run around every endpoint invocation, outermost first
+    * @since 1.1.0
+    */
+   public RestControllerAdapterMethodInvoker(
+      final ObjectMapper objectMapper,
+      final FailureProblemMapper failureMapper,
+      final List<EndpointInterceptor> interceptors)
+   {
+      this(defaultResolvers(objectMapper), failureMapper, interceptors);
+   }
+
+   /**
+    * Constructor.
+    *
+    * @param argumentResolvers the ordered resolvers used to bind handler-method parameters; the first
+    *        resolver that supports a parameter resolves it, so a catch-all body resolver should be last
+    * @param failureMapper     the mapper used to turn {@link EndpointResult.Failed} results into problem details
+    * @param interceptors      the interceptors run around every endpoint invocation, outermost first
+    * @since 1.1.0
+    */
+   public RestControllerAdapterMethodInvoker(
+      final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers,
+      final FailureProblemMapper failureMapper,
+      final List<EndpointInterceptor> interceptors)
+   {
+      this(argumentResolvers, new ExceptionProblemDetailMapper(), failureMapper, interceptors);
    }
 
    /**
@@ -125,15 +162,18 @@ public final class RestControllerAdapterMethodInvoker
     * @param argumentResolvers the ordered resolvers used to bind handler-method parameters
     * @param exceptionMapper   the mapper used to turn exceptions into problem details
     * @param failureMapper     the mapper used to turn failed endpoint results into problem details
+    * @param interceptors      the interceptors run around every endpoint invocation, outermost first
     */
    RestControllerAdapterMethodInvoker(
       final List<AdapterArgumentResolver<ArgumentResolutionContext>> argumentResolvers,
       final ExceptionProblemDetailMapper exceptionMapper,
-      final FailureProblemMapper failureMapper)
+      final FailureProblemMapper failureMapper,
+      final List<EndpointInterceptor> interceptors)
    {
       this.argumentResolvers = List.copyOf(argumentResolvers);
       this.exceptionMapper = exceptionMapper;
       this.failureMapper = Objects.requireNonNull(failureMapper, "failureMapper cannot be null");
+      this.interceptors = List.copyOf(Objects.requireNonNull(interceptors, "interceptors cannot be null"));
    }
 
    /**
@@ -159,6 +199,12 @@ public final class RestControllerAdapterMethodInvoker
     * anything else to a generic {@code 500} carrying an error id that is also logged. JVM {@link Error}s are not
     * mapped and propagate.
     * </p>
+    * <p>
+    * The configured {@link EndpointInterceptor}s run around the handler invocation, outermost first, sharing a
+    * fresh set of per-request {@link Attributes} that argument resolvers can also read. Runtime exceptions thrown
+    * by an interceptor are mapped to a {@link ProblemDetail} by the same rules, and an interceptor that returns
+    * {@code null} is answered with a generic {@code 500}.
+    * </p>
     *
     * @param match   the matched route to invoke
     * @param request the request being handled
@@ -168,13 +214,42 @@ public final class RestControllerAdapterMethodInvoker
    @SuppressWarnings("checkstyle:IllegalCatch")
    public RestResponse invokeRestControllerAdapterMethod(final RouteMatch match, final RestRequest request)
    {
-      Method handlerMethod = match.handler().method();
-      ArgumentResolutionContext context = new ArgumentResolutionContext(request, match.pathVariables());
+      try
+      {
+         return proceed(0, new EndpointInvocation(request, match, new Attributes()));
+      }
+      catch (final MissingArgumentResolverException ex)
+      {
+         throw ex;
+      }
+      catch (final RuntimeException ex)
+      {
+         return RestResponse.problem(exceptionMapper.map(ex, request));
+      }
+   }
+
+   private RestResponse proceed(final int index, final EndpointInvocation invocation)
+   {
+      if (index == interceptors.size())
+      {
+         return invokeHandler(invocation);
+      }
+      EndpointInterceptor interceptor = interceptors.get(index);
+      return Objects.requireNonNull(
+         interceptor.intercept(invocation, next -> proceed(index + 1, next)),
+         () -> "Endpoint interceptor " + interceptor + " returned null");
+   }
+
+   @SuppressWarnings("checkstyle:IllegalCatch")
+   private RestResponse invokeHandler(final EndpointInvocation invocation)
+   {
+      RestRequest request = invocation.request();
+      Method handlerMethod = invocation.method();
 
       try
       {
-         Object[] args = resolveArguments(handlerMethod, context);
-         Object result = handlerMethod.invoke(match.handler().bean(), args);
+         Object[] args = resolveArguments(invocation);
+         Object result = handlerMethod.invoke(invocation.match().handler().bean(), args);
 
          return toResponse(result, request, handlerMethod);
       }
@@ -235,9 +310,11 @@ public final class RestControllerAdapterMethodInvoker
       return body instanceof ApiResponse<?> response ? response : ApiResponse.of(body);
    }
 
-   private Object[] resolveArguments(final Method handlerMethod, final ArgumentResolutionContext context)
-      throws IOException
+   private Object[] resolveArguments(final EndpointInvocation invocation) throws IOException
    {
+      Method handlerMethod = invocation.method();
+      ArgumentResolutionContext context = new ArgumentResolutionContext(
+         invocation.request(), invocation.match().pathVariables(), invocation.attributes());
       Parameter[] parameters = handlerMethod.getParameters();
       Object[] args = new Object[parameters.length];
 

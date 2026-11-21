@@ -27,10 +27,12 @@ import io.github.jamoamo.honeycomb.rest.DefaultFailureProblemMapper;
 import io.github.jamoamo.honeycomb.rest.FailureProblemMapper;
 import io.github.jamoamo.honeycomb.rest.PathTemplateParser;
 import io.github.jamoamo.honeycomb.rest.RestControllerAdapterMethodInvoker;
+import io.github.jamoamo.honeycomb.rest.intercept.EndpointInterceptor;
 import io.github.jamoamo.honeycomb.rest.spring.PathPatternTemplateParser;
 import io.github.jamoamo.honeycomb.rest.spring.RestControllerAdapterHandlerAdapter;
 import io.github.jamoamo.honeycomb.rest.spring.RestControllerAdapterHandlerMapping;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -110,15 +112,19 @@ public class HoneycombRestAutoConfiguration
     *
     * @param objectMapper  the object mapper used to deserialize request bodies
     * @param failureMapper the policy that maps failed endpoint results to problem details
+    * @param interceptors  every {@link EndpointInterceptor} bean, run around each endpoint in {@code @Order}
+    *        order, lowest first and outermost
     * @return the method invoker
     */
    @Bean
    @ConditionalOnMissingBean
    public RestControllerAdapterMethodInvoker honeycombRestControllerAdapterMethodInvoker(
       final ObjectMapper objectMapper,
-      final FailureProblemMapper failureMapper)
+      final FailureProblemMapper failureMapper,
+      final ObjectProvider<EndpointInterceptor> interceptors)
    {
-      return new RestControllerAdapterMethodInvoker(objectMapper, failureMapper);
+      return new RestControllerAdapterMethodInvoker(
+         objectMapper, failureMapper, interceptors.orderedStream().toList());
    }
 
    /**
