@@ -79,8 +79,21 @@ public final class MessagePayloadArgumentResolver implements AdapterArgumentReso
       }
       catch (final JacksonException ex)
       {
-         LOGGER.warn("Failed to deserialize message payload.", ex);
+         LOGGER.warn("Failed to deserialize message payload as {}: {}", parameter.getType().getName(), describe(ex));
+         LOGGER.debug("Message payload deserialization failure.", ex);
          throw new MalformedMessageException("Malformed message payload.", ex);
       }
+   }
+
+   // Describes a deserialization failure without its message, which can quote values from the input.
+   private static String describe(final JacksonException ex)
+   {
+      if (ex.getLocation() == null)
+      {
+         return ex.getClass().getSimpleName();
+      }
+
+      return ex.getClass().getSimpleName() + " at line " + ex.getLocation().getLineNr()
+         + ", column " + ex.getLocation().getColumnNr();
    }
 }

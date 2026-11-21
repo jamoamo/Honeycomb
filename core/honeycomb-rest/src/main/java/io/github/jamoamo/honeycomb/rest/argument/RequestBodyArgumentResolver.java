@@ -79,8 +79,21 @@ public final class RequestBodyArgumentResolver implements AdapterArgumentResolve
       }
       catch (final JacksonException ex)
       {
-         LOGGER.warn("Failed to deserialize request body.", ex);
+         LOGGER.warn("Failed to deserialize request body as {}: {}", parameter.getType().getName(), describe(ex));
+         LOGGER.debug("Request body deserialization failure.", ex);
          throw new BadRequestException("Malformed request body.", ex);
       }
+   }
+
+   // Describes a deserialization failure without its message, which can quote values from the input.
+   private static String describe(final JacksonException ex)
+   {
+      if (ex.getLocation() == null)
+      {
+         return ex.getClass().getSimpleName();
+      }
+
+      return ex.getClass().getSimpleName() + " at line " + ex.getLocation().getLineNr()
+         + ", column " + ex.getLocation().getColumnNr();
    }
 }
