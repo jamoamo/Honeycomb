@@ -29,6 +29,14 @@ import io.github.jamoamo.honeycomb.rest.HandlerMethod;
 import io.github.jamoamo.honeycomb.rest.PathTemplateParser;
 import io.github.jamoamo.honeycomb.rest.RestControllerAdapterMethodInvoker;
 import io.github.jamoamo.honeycomb.rest.RouteMatch;
+import io.github.jamoamo.honeycomb.rest.auth.AnnotationAuthorizationPolicy;
+import io.github.jamoamo.honeycomb.rest.auth.AuthInterceptor;
+import io.github.jamoamo.honeycomb.rest.auth.AuthenticatedPrincipal;
+import io.github.jamoamo.honeycomb.rest.auth.AuthorizationPolicy;
+import io.github.jamoamo.honeycomb.rest.auth.BearerTokenExtractor;
+import io.github.jamoamo.honeycomb.rest.auth.CredentialExtractor;
+import io.github.jamoamo.honeycomb.rest.auth.PermitAll;
+import io.github.jamoamo.honeycomb.rest.auth.TokenAuthenticator;
 import io.github.jamoamo.honeycomb.rest.intercept.EndpointInterceptor;
 import io.github.jamoamo.honeycomb.rest.request.RestRequest;
 import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
@@ -53,6 +61,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -63,8 +72,81 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class HoneycombRestAutoConfigurationTest
 {
-   private final WebApplicationContextRunner runner = new WebApplicationContextRunner()
+   private static final TokenAuthenticator AUTHENTICATOR = token -> AuthenticatedPrincipal.of("tester");
+
+   private final WebApplicationContextRunner bareRunner = new WebApplicationContextRunner()
       .withConfiguration(AutoConfigurations.of(HoneycombRestAutoConfiguration.class));
+
+   private final WebApplicationContextRunner runner =
+      bareRunner.withBean(TokenAuthenticator.class, () -> AUTHENTICATOR);
+
+   @Test
+   void securesEndpointsByDefault()
+   {
+      runner.run(context -> {
+         assertThat(context).hasSingleBean(AuthInterceptor.class);
+         assertThat(context.getBean(CredentialExtractor.class)).isInstanceOf(BearerTokenExtractor.class);
+         assertThat(context.getBean(AuthorizationPolicy.class)).isInstanceOf(AnnotationAuthorizationPolicy.class);
+         assertThat(context.getBean(HoneycombRestAuthProperties.class).enabled()).isTrue();
+      });
+   }
+
+   @Test
+   void failsToStartWithoutATokenAuthenticator()
+   {
+      bareRunner.run(context -> assertThat(context).hasFailed()
+         .getFailure().rootCause().isInstanceOf(IllegalStateException.class)
+         .hasMessageContaining("TokenAuthenticator")
+         .hasMessageContaining("honeycomb.rest.auth.enabled=false"));
+   }
+
+   @Test
+   void registersNoAuthWhenAuthIsDisabled()
+   {
+      bareRunner.withPropertyValues("honeycomb.rest.auth.enabled=false")
+         .run(context -> assertThat(context)
+            .hasNotFailed()
+            .hasSingleBean(RestControllerAdapterMethodInvoker.class)
+            .doesNotHaveBean(AuthInterceptor.class)
+            .doesNotHaveBean(CredentialExtractor.class)
+            .doesNotHaveBean(AuthorizationPolicy.class));
+   }
+
+   @Test
+   void backsOffForTheApplicationsOwnAuthBeans()
+   {
+      CredentialExtractor extractor = request -> Optional.empty();
+      AuthorizationPolicy policy = (principal, invocation) -> { };
+      runner.withBean(CredentialExtractor.class, () -> extractor)
+         .withBean(AuthorizationPolicy.class, () -> policy)
+         .run(context -> {
+            assertThat(context.getBean(CredentialExtractor.class)).isSameAs(extractor);
+            assertThat(context.getBean(AuthorizationPolicy.class)).isSameAs(policy);
+            assertThat(context).hasSingleBean(AuthInterceptor.class);
+         });
+   }
+
+   @Test
+   void answersUnauthenticatedRequestsWith401()
+   {
+      runner.run(context -> {
+         RouteMatch match = new RouteMatch(
+            new HandlerMethod(new Secured(), Secured.class.getMethod("secret")), Map.of());
+
+         RestResponse response = context.getBean(RestControllerAdapterMethodInvoker.class)
+            .invokeRestControllerAdapterMethod(match, new GetRequest());
+
+         assertThat(response.status()).isEqualTo(401);
+      });
+   }
+
+   public static final class Secured
+   {
+      public String secret()
+      {
+         return "secret";
+      }
+   }
 
    @Test
    void registersTheHandlerMappingAndHandlerAdapterByDefault()
@@ -159,6 +241,7 @@ class HoneycombRestAutoConfigurationTest
          });
    }
 
+   @PermitAll
    public static final class Pinger
    {
       public String ping()

@@ -284,6 +284,79 @@ public RestControllerAdapterHandlerAdapter handlerAdapter(final ObjectMapper obj
 Adapters themselves need no registration beyond being beans: the handler mapping finds every bean in the
 application context annotated with `@RestControllerAdapter` and registers its routes at startup.
 
+## Securing REST endpoints
+
+REST endpoints are secured by default. The `AuthInterceptor` extracts a bearer token from the `Authorization`
+header, validates it with a `TokenAuthenticator`, checks the endpoint's requirements with an `AuthorizationPolicy`
+and makes the caller available as an `AuthenticatedPrincipal`. A missing or invalid token is answered with a `401`
+and a caller lacking the required scopes or roles with a `403`, both as problem details carrying an RFC 6750
+`WWW-Authenticate` header. Why a token was rejected is logged at debug level, never returned.
+
+```java
+@RestControllerAdapter(version = "v1", apiPath = "/orders")
+@RequiresScopes("orders:read")
+public final class OrderRestAdapter
+{
+   @Endpoint(path = "/{id}", method = HttpVerb.GET)
+   public EndpointResult<OrderResponse> find(@PathVariable("id") final UUID id)
+   {
+      ...
+   }
+
+   @Endpoint(path = "/", method = HttpVerb.POST)
+   @RequiresScopes({"orders:read", "orders:write"})
+   public EndpointResult<OrderResponse> place(
+      @CurrentPrincipal final AuthenticatedPrincipal caller,
+      final PlaceOrderRequest request)
+   {
+      ...
+   }
+
+   @Endpoint(path = "/health", method = HttpVerb.GET)
+   @PermitAll
+   public EndpointResult<String> health()
+   {
+      return EndpointResult.ok("up");
+   }
+}
+```
+
+- `@PermitAll` makes an endpoint public; any credential presented to it is ignored. A `@CurrentPrincipal`
+  parameter on a public endpoint must be declared as `Optional<AuthenticatedPrincipal>`.
+- `@RequiresScopes` needs all of its scopes by default and `@RequiresRoles` any one of its roles; set `match` to
+  `Match.ANY` or `Match.ALL` to change that.
+- Each annotation can go on the adapter class, where it applies to every endpoint that doesn't declare its own.
+  A method-level requirement overrides a class-level `@PermitAll`, and a method-level `@PermitAll` overrides
+  class-level requirements.
+- An endpoint with no annotations is open to any authenticated caller.
+
+`TokenAuthenticator` is a port: `honeycomb-auth-jwt` provides a JWT implementation, or implement it yourself.
+`CredentialExtractor` (default `BearerTokenExtractor`) and `AuthorizationPolicy` (default
+`AnnotationAuthorizationPolicy`) can be replaced as well. Without Spring Boot, add the interceptor to the invoker:
+
+```java
+new RestControllerAdapterMethodInvoker(objectMapper, failureMapper, List.of(new AuthInterceptor(authenticator)));
+```
+
+With the Spring Boot starter, declare a `TokenAuthenticator` bean and the rest is auto-configured; declare your own
+`CredentialExtractor` or `AuthorizationPolicy` bean to replace the default. **If there is no `TokenAuthenticator`
+bean the application fails to start**, so that endpoints are never served unsecured by accident. To serve
+endpoints without authentication, opt out explicitly:
+
+```yaml
+honeycomb:
+   rest:
+      auth:
+         enabled: false
+```
+
+> **Upgrading from 1.0:** 1.0 served every endpoint without authentication. From 1.1, applications using the
+> starter must either declare a `TokenAuthenticator` bean or set `honeycomb.rest.auth.enabled=false`.
+
+Auth runs as an `EndpointInterceptor` at `AuthInterceptor.ORDER`. Your own interceptor beans run around every
+endpoint in `@Order` order, and can read the principal from `invocation.attributes()` under
+`AuthenticatedPrincipal.ATTRIBUTE` when they are ordered after it.
+
 ## Declaring a message consumer adapter
 
 An incoming messaging boundary is a plain class annotated with `@MessageConsumerAdapter`, naming the stream its

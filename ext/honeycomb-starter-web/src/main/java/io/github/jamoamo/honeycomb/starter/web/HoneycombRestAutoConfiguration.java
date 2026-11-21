@@ -27,6 +27,12 @@ import io.github.jamoamo.honeycomb.rest.DefaultFailureProblemMapper;
 import io.github.jamoamo.honeycomb.rest.FailureProblemMapper;
 import io.github.jamoamo.honeycomb.rest.PathTemplateParser;
 import io.github.jamoamo.honeycomb.rest.RestControllerAdapterMethodInvoker;
+import io.github.jamoamo.honeycomb.rest.auth.AnnotationAuthorizationPolicy;
+import io.github.jamoamo.honeycomb.rest.auth.AuthInterceptor;
+import io.github.jamoamo.honeycomb.rest.auth.AuthorizationPolicy;
+import io.github.jamoamo.honeycomb.rest.auth.BearerTokenExtractor;
+import io.github.jamoamo.honeycomb.rest.auth.CredentialExtractor;
+import io.github.jamoamo.honeycomb.rest.auth.TokenAuthenticator;
 import io.github.jamoamo.honeycomb.rest.intercept.EndpointInterceptor;
 import io.github.jamoamo.honeycomb.rest.spring.PathPatternTemplateParser;
 import io.github.jamoamo.honeycomb.rest.spring.RestControllerAdapterHandlerAdapter;
@@ -40,6 +46,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.web.servlet.DispatcherServlet;
 import tools.jackson.databind.ObjectMapper;
 
@@ -65,9 +73,76 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnClass({RestControllerAdapterHandlerMapping.class, DispatcherServlet.class})
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(prefix = HoneycombRestProperties.PREFIX, name = "enabled", matchIfMissing = true)
-@EnableConfigurationProperties(HoneycombRestProperties.class)
+@EnableConfigurationProperties({HoneycombRestProperties.class, HoneycombRestAuthProperties.class})
 public class HoneycombRestAutoConfiguration
 {
+   /**
+    * Secures every endpoint not marked {@code @PermitAll}, unless {@code honeycomb.rest.auth.enabled=false}.
+    *
+    * <p>
+    * A {@link TokenAuthenticator} bean is required: without one the application fails to start rather than
+    * silently serving unsecured endpoints.
+    * </p>
+    *
+    * @author James Amoore
+    * @since 1.1.0
+    */
+   @Configuration(proxyBeanMethods = false)
+   @ConditionalOnBooleanProperty(prefix = HoneycombRestAuthProperties.PREFIX, name = "enabled", matchIfMissing = true)
+   public static class AuthConfiguration
+   {
+      /**
+       * The extractor of the caller's credential; a bearer token by default.
+       *
+       * @return the credential extractor
+       */
+      @Bean
+      @ConditionalOnMissingBean
+      public CredentialExtractor honeycombCredentialExtractor()
+      {
+         return new BearerTokenExtractor();
+      }
+
+      /**
+       * The authorization policy; enforces {@code @RequiresScopes} and {@code @RequiresRoles} by default.
+       *
+       * @return the authorization policy
+       */
+      @Bean
+      @ConditionalOnMissingBean
+      public AuthorizationPolicy honeycombAuthorizationPolicy()
+      {
+         return new AnnotationAuthorizationPolicy();
+      }
+
+      /**
+       * The interceptor that authenticates and authorizes callers.
+       *
+       * @param extractor      the credential extractor
+       * @param authenticators the application's token authenticator
+       * @param policy         the authorization policy
+       * @return the interceptor
+       * @throws IllegalStateException if the application declares no {@link TokenAuthenticator}
+       */
+      @Bean
+      @ConditionalOnMissingBean
+      @Order(AuthInterceptor.ORDER)
+      public AuthInterceptor honeycombAuthInterceptor(
+         final CredentialExtractor extractor,
+         final ObjectProvider<TokenAuthenticator> authenticators,
+         final AuthorizationPolicy policy)
+      {
+         TokenAuthenticator authenticator = authenticators.getIfUnique();
+         if (authenticator == null)
+         {
+            throw new IllegalStateException("Honeycomb REST endpoints are secured by default but no single "
+               + "TokenAuthenticator bean is defined. Declare one (for example with honeycomb-auth-jwt), or set "
+               + HoneycombRestAuthProperties.PREFIX + ".enabled=false to serve endpoints without authentication.");
+         }
+         return new AuthInterceptor(extractor, authenticator, policy);
+      }
+   }
+
    /**
     * The object mapper used to read request bodies and write responses, for an application that does not
     * already have one. Spring Boot's own Jackson auto-configuration contributes one to every typical
