@@ -29,6 +29,7 @@ A use case knows nothing about the adapter that called it and nothing about the 
 | `honeycomb-rest`          | REST adapter annotations, routing, argument binding, `ApiResponse`, `ProblemDetail`   |
 | `honeycomb-rest-spring`   | Spring WebMVC (Spring Framework 7 / Boot 4) integration for the REST adapter model    |
 | `honeycomb-starter-web`   | Spring Boot starter auto-configuring the Spring WebMVC REST integration               |
+| `honeycomb-auth-jwt`      | JWT `TokenAuthenticator` for REST endpoints, backed by Nimbus JOSE+JWT, with Spring Boot auto-configuration |
 | `honeycomb-messaging`     | Broker-neutral message consumer adapter annotations, subject routing, argument binding, `MessageOutcome` |
 | `honeycomb-nats`          | NATS JetStream binding for the message consumer adapter model                        |
 | `honeycomb-telegram`      | Telegram bot adapter annotations, command routing, argument binding, `BotResponse`    |
@@ -356,6 +357,62 @@ honeycomb:
 Auth runs as an `EndpointInterceptor` at `AuthInterceptor.ORDER`. Your own interceptor beans run around every
 endpoint in `@Order` order, and can read the principal from `invocation.attributes()` under
 `AuthenticatedPrincipal.ATTRIBUTE` when they are ordered after it.
+
+### JWT authentication
+
+`honeycomb-auth-jwt` provides `JwtTokenAuthenticator`, backed by Nimbus JOSE+JWT. With Spring Boot, add the module
+next to the starter and configure exactly one key source; the authenticator is then auto-configured:
+
+```xml
+<dependency>
+   <groupId>io.github.jamoamo.honeycomb</groupId>
+   <artifactId>honeycomb-auth-jwt</artifactId>
+</dependency>
+```
+
+```yaml
+honeycomb:
+   rest:
+      auth:
+         jwt:
+            jwks-uri: https://issuer.example/.well-known/jwks.json
+            issuer: https://issuer.example/
+            audiences: orders-api
+```
+
+| Property (`honeycomb.rest.auth.jwt.`) | Default                     | Meaning                                                                     |
+|---------------------------------------|-----------------------------|-----------------------------------------------------------------------------|
+| `jwks-uri`                            |                             | Key source: a JWK set, cached and refreshed when a token names an unknown `kid` |
+| `public-key`                          |                             | Key source: an RSA or EC public key as a PEM `PUBLIC KEY` or `CERTIFICATE` |
+| `public-key-location`                 |                             | Key source: a resource holding that PEM, e.g. `file:/etc/keys/jwt.pem`     |
+| `secret`                              |                             | Key source: an HMAC secret (UTF-8, at least 256 bits for `HS256`)          |
+| `issuer`                              | any                         | Required `iss`                                                              |
+| `audiences`                           | any                         | Accepted `aud` values; the token must name at least one                    |
+| `algorithms`                          | by key source               | Accepted algorithms; `RS256` for a JWKS URI or RSA key, the curve's algorithm for an EC key, `HS256` for a secret |
+| `clock-skew`                          | `60s`                       | Tolerance when checking `exp` and `nbf`                                    |
+| `subject-claim`                       | `sub`                       | Claim holding the subject                                                   |
+| `scope-claims`                        | `scope`, `scp`              | Claims holding the scopes, first present wins; a space-separated string or an array |
+| `roles-claim`                         | `roles`                     | Claim holding the roles; a space-separated string or an array              |
+| `jwks-cache-ttl`                      | `5m`                        | How long a fetched JWK set is cached                                        |
+| `jwks-min-refresh-interval`           | `30s`                       | Minimum interval between JWK set fetches; `0` disables the limit           |
+
+Every token must be signed (unsigned and encrypted tokens are rejected) with an accepted algorithm, and must carry
+an `exp` that has not passed. Algorithms must suit the key, so an RSA or EC key can never be used as an HMAC secret
+and `none` is never accepted. RSA keys must be at least 2048 bits. An unreachable JWKS endpoint is a server-side
+failure and is answered with a `500`, not a `401`. Setting more than one key source fails startup, and declaring
+your own `TokenAuthenticator` bean replaces the auto-configured one.
+
+Without Spring Boot, build the authenticator directly:
+
+```java
+TokenAuthenticator authenticator = JwtTokenAuthenticator.builder()
+   .jwksUri(URI.create("https://issuer.example/.well-known/jwks.json"))
+   .issuer("https://issuer.example/")
+   .audiences("orders-api")
+   .build();
+```
+
+Pass a `ClaimsMapper` to the builder to derive the principal from the claims differently.
 
 ## Declaring a message consumer adapter
 

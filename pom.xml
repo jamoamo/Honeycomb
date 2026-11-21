@@ -55,6 +55,7 @@
       <jnats.version>2.26.0</jnats.version>
       <telegrambots.version>10.1.1</telegrambots.version>
       <quartz.version>2.3.2</quartz.version>
+      <nimbus.jose.jwt.version>10.10</nimbus.jose.jwt.version>
       <junit.version>6.1.0</junit.version>
       <mockito.version>5.23.0</mockito.version>
       <assertj.version>3.27.7</assertj.version>
@@ -146,6 +147,11 @@
             <artifactId>honeycomb-quartz</artifactId>
             <version>${project.version}</version>
          </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-auth-jwt</artifactId>
+            <version>${project.version}</version>
+         </dependency>
 
          <!-- Third Party Dependencies -->
          <dependency>
@@ -197,6 +203,11 @@
             <groupId>org.quartz-scheduler</groupId>
             <artifactId>quartz</artifactId>
             <version>${quartz.version}</version>
+         </dependency>
+         <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <version>${nimbus.jose.jwt.version}</version>
          </dependency>
 
          <!-- Test Dependencies -->
