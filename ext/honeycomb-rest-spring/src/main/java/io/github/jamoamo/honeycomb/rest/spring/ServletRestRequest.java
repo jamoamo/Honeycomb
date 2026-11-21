@@ -29,6 +29,8 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 
 /**
@@ -88,6 +90,21 @@ public final class ServletRestRequest implements RestRequest
       }
 
       return List.of(values);
+   }
+
+   /**
+    * {@inheritDoc}
+    */
+   @Override
+   public List<String> headerValues(final String name)
+   {
+      Enumeration<String> values = request.getHeaders(name);
+      if (values == null)
+      {
+         return List.of();
+      }
+
+      return Collections.list(values);
    }
 
    /**

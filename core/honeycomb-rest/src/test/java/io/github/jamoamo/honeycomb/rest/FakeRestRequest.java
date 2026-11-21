@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * A simple in-memory {@link RestRequest} for tests.
@@ -41,6 +42,7 @@ public final class FakeRestRequest implements RestRequest
    private final String method;
    private final String path;
    private final Map<String, List<String>> queryParameters;
+   private final Map<String, List<String>> headers;
    private final String body;
 
    public FakeRestRequest(final String method, final String path)
@@ -54,6 +56,18 @@ public final class FakeRestRequest implements RestRequest
       final Map<String, List<String>> queryParameters,
       final String body)
    {
+      this(method, path, queryParameters, Map.of(), body);
+   }
+
+   public FakeRestRequest(
+      final String method,
+      final String path,
+      final Map<String, List<String>> queryParameters,
+      final Map<String, List<String>> headers,
+      final String body)
+   {
+      this.headers = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+      this.headers.putAll(headers);
       this.method = method;
       this.path = path;
       this.queryParameters = queryParameters;
@@ -76,6 +90,12 @@ public final class FakeRestRequest implements RestRequest
    public List<String> queryParameterValues(final String name)
    {
       return queryParameters.getOrDefault(name, List.of());
+   }
+
+   @Override
+   public List<String> headerValues(final String name)
+   {
+      return headers.getOrDefault(name, List.of());
    }
 
    @Override

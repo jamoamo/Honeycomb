@@ -83,6 +83,22 @@ public class ServletRestRequestTest
    }
 
    @Test
+   @DisplayName("exposes header values matched case-insensitively")
+   public void testHeaderValues()
+   {
+      MockHttpServletRequest request = new MockHttpServletRequest("GET", "/users");
+      request.addHeader("X-Idempotency-Key", "k1");
+      request.addHeader("Accept", "a");
+      request.addHeader("Accept", "b");
+
+      ServletRestRequest restRequest = new ServletRestRequest(request);
+
+      assertThat(restRequest.headerValues("x-idempotency-key")).containsExactly("k1");
+      assertThat(restRequest.headerValues("Accept")).containsExactly("a", "b");
+      assertThat(restRequest.headerValues("missing")).isEmpty();
+   }
+
+   @Test
    @DisplayName("exposes the request body")
    public void testBody() throws IOException
    {

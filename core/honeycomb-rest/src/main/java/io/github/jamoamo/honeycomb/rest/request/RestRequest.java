@@ -65,6 +65,23 @@ public interface RestRequest
    List<String> queryParameterValues(String name);
 
    /**
+    * The values supplied for the named request header. Header names are matched case-insensitively.
+    *
+    * <p>
+    * The default implementation reports every header as absent so that existing implementations remain
+    * source compatible; hosting modules should override it.
+    * </p>
+    *
+    * @param name the header name, matched case-insensitively
+    * @return the values in the order supplied, or an empty list when the header is absent
+    * @since 1.1.0
+    */
+   default List<String> headerValues(final String name)
+   {
+      return List.of();
+   }
+
+   /**
     * The request body.
     *
     * @return a stream over the request body
