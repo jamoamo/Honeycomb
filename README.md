@@ -414,6 +414,48 @@ TokenAuthenticator authenticator = JwtTokenAuthenticator.builder()
 
 Pass a `ClaimsMapper` to the builder to derive the principal from the claims differently.
 
+## Idempotent REST endpoints
+
+Mark an endpoint `@Idempotent` and clients can retry it safely by sending the same `X-Idempotency-Key` header:
+
+```java
+@Endpoint(path = "/", method = HttpVerb.POST)
+@Idempotent(required = true, ttl = "PT24H")
+public EndpointResult<OrderResponse> place(final PlaceOrderRequest request)
+{
+   ...
+}
+```
+
+The key is scoped to the caller and the endpoint, so two callers can't collide on a key, and the request is
+fingerprinted from its method, path and body. Then:
+
+- **First use of a key:** the endpoint runs. A `2xx` response is stored for replay. Any other outcome (a `4xx`, a
+  `5xx` or an exception) releases the key so the request can be retried with it.
+- **Repeat of a completed request:** the stored status, headers and body are returned with an
+  `Idempotent-Replayed: true` header, and the endpoint is not invoked again.
+- **Repeat while the first request is still running:** `409 Conflict`.
+- **Same key, different request:** `422 Unprocessable Content`.
+- **No key:** the endpoint runs normally, unless `required = true`, which answers with a `400`. Keys longer than
+  255 characters are also rejected with a `400`.
+
+Keys are remembered for `ttl`, an ISO-8601 duration that defaults to 24 hours. On `@PermitAll` endpoints all
+anonymous callers share one scope.
+
+Both the key source and the storage are pluggable. `IdempotencyKeyResolver` defaults to
+`HeaderIdempotencyKeyResolver`, which reads `X-Idempotency-Key`; pass another header name or implement your own.
+`IdempotencyStore` defaults to `InMemoryIdempotencyStore`, which only holds keys within one application instance;
+implement the port over a shared database or cache to make idempotency hold across instances. Its `tryAcquire` must
+be atomic. With the Spring Boot starter everything is auto-configured, and declaring your own
+`IdempotencyKeyResolver` or `IdempotencyStore` bean replaces the default. Without Spring Boot, add the interceptor
+after the auth interceptor:
+
+```java
+new RestControllerAdapterMethodInvoker(objectMapper, failureMapper, List.of(
+   new AuthInterceptor(authenticator),
+   new IdempotencyInterceptor(new InMemoryIdempotencyStore(), objectMapper)));
+```
+
 ## Declaring a message consumer adapter
 
 An incoming messaging boundary is a plain class annotated with `@MessageConsumerAdapter`, naming the stream its

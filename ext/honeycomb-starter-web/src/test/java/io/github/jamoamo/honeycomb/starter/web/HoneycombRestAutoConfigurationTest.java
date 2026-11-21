@@ -37,6 +37,11 @@ import io.github.jamoamo.honeycomb.rest.auth.BearerTokenExtractor;
 import io.github.jamoamo.honeycomb.rest.auth.CredentialExtractor;
 import io.github.jamoamo.honeycomb.rest.auth.PermitAll;
 import io.github.jamoamo.honeycomb.rest.auth.TokenAuthenticator;
+import io.github.jamoamo.honeycomb.rest.idempotency.HeaderIdempotencyKeyResolver;
+import io.github.jamoamo.honeycomb.rest.idempotency.IdempotencyInterceptor;
+import io.github.jamoamo.honeycomb.rest.idempotency.IdempotencyKeyResolver;
+import io.github.jamoamo.honeycomb.rest.idempotency.IdempotencyStore;
+import io.github.jamoamo.honeycomb.rest.idempotency.InMemoryIdempotencyStore;
 import io.github.jamoamo.honeycomb.rest.intercept.EndpointInterceptor;
 import io.github.jamoamo.honeycomb.rest.request.RestRequest;
 import io.github.jamoamo.honeycomb.rest.response.ProblemDetail;
@@ -89,6 +94,27 @@ class HoneycombRestAutoConfigurationTest
          assertThat(context.getBean(AuthorizationPolicy.class)).isInstanceOf(AnnotationAuthorizationPolicy.class);
          assertThat(context.getBean(HoneycombRestAuthProperties.class).enabled()).isTrue();
       });
+   }
+
+   @Test
+   void registersIdempotencyByDefault()
+   {
+      runner.run(context -> {
+         assertThat(context).hasSingleBean(IdempotencyInterceptor.class);
+         assertThat(context.getBean(IdempotencyStore.class)).isInstanceOf(InMemoryIdempotencyStore.class);
+         assertThat(context.getBean(IdempotencyKeyResolver.class)).isInstanceOf(HeaderIdempotencyKeyResolver.class);
+      });
+   }
+
+   @Test
+   void backsOffForTheApplicationsOwnIdempotencyStore()
+   {
+      IdempotencyStore own = new InMemoryIdempotencyStore();
+      runner.withBean(IdempotencyStore.class, () -> own)
+         .run(context -> {
+            assertThat(context.getBean(IdempotencyStore.class)).isSameAs(own);
+            assertThat(context).hasSingleBean(IdempotencyInterceptor.class);
+         });
    }
 
    @Test
