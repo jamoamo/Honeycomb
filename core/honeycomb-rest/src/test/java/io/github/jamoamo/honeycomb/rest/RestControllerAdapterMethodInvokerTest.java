@@ -24,6 +24,7 @@
 package io.github.jamoamo.honeycomb.rest;
 
 import io.github.jamoamo.honeycomb.adapter.argument.AdapterArgumentResolver;
+import io.github.jamoamo.honeycomb.rest.adapter.HeaderParam;
 import io.github.jamoamo.honeycomb.rest.adapter.PathVariable;
 import io.github.jamoamo.honeycomb.rest.adapter.QueryParam;
 import io.github.jamoamo.honeycomb.rest.argument.ArgumentResolutionContext;
@@ -80,6 +81,11 @@ public class RestControllerAdapterMethodInvokerTest
       public String greet(@PathVariable("id") final int id, @QueryParam("greeting") final String greeting)
       {
          return greeting + " " + id;
+      }
+
+      public String keyed(@HeaderParam("X-Idempotency-Key") final Optional<String> key)
+      {
+         return key.orElse("none");
       }
 
       public Body echo(final Body body)
@@ -202,6 +208,19 @@ public class RestControllerAdapterMethodInvokerTest
 
       assertThat(response.data().orElseThrow()).isEqualTo("hello 42");
       assertThat(response.meta()).isEmpty();
+   }
+
+   @Test
+   @DisplayName("binds request headers")
+   public void testBindsHeaders()
+   {
+      RestRequest request = new FakeRestRequest(
+         "GET", "/keyed", Map.of(), Map.of("x-idempotency-key", List.of("k1")), "");
+
+      assertThat(apiResponse(invoker.invokeRestControllerAdapterMethod(match("keyed", Map.of()), request))
+         .data().orElseThrow()).isEqualTo("k1");
+      assertThat(apiResponse(invoker.invokeRestControllerAdapterMethod(
+         match("keyed", Map.of()), new FakeRestRequest("GET", "/keyed"))).data().orElseThrow()).isEqualTo("none");
    }
 
    @Test
