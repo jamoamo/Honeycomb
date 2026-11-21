@@ -31,6 +31,7 @@ import io.github.jamoamo.honeycomb.rest.argument.HeaderParamArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.argument.PathVariableArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.argument.QueryParamArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.argument.RequestBodyArgumentResolver;
+import io.github.jamoamo.honeycomb.rest.auth.CurrentPrincipalArgumentResolver;
 import io.github.jamoamo.honeycomb.rest.intercept.Attributes;
 import io.github.jamoamo.honeycomb.rest.intercept.EndpointInterceptor;
 import io.github.jamoamo.honeycomb.rest.intercept.EndpointInvocation;
@@ -348,6 +349,7 @@ public final class RestControllerAdapterMethodInvoker
          new PathVariableArgumentResolver(valueConverter),
          new QueryParamArgumentResolver(valueConverter),
          new HeaderParamArgumentResolver(valueConverter),
+         new CurrentPrincipalArgumentResolver(),
          new RequestBodyArgumentResolver(objectMapper));
    }
 }
