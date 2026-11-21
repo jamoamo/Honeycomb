@@ -90,6 +90,11 @@
             <artifactId>honeycomb-quartz</artifactId>
             <version>${project.version}</version>
          </dependency>
+         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>honeycomb-auth-jwt</artifactId>
+            <version>${project.version}</version>
+         </dependency>
       </dependencies>
    </dependencyManagement>
 </project>
