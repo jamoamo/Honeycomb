@@ -100,7 +100,7 @@ public abstract class UseCase<I, O>
    @SuppressWarnings("checkstyle:IllegalCatch")
    public final UseCaseResult<O> execute(final I input)
    {
-      LOGGER.debug("Executing use case {} with input: {}", useCaseName(), input);
+      LOGGER.debug("Executing use case {} with input of type {}", useCaseName(), inputType(input));
       try
       {
          return validateAndExecute(input);
@@ -112,7 +112,7 @@ public abstract class UseCase<I, O>
       }
       catch (final Throwable e)
       {
-         LOGGER.error("Use case {} failed unexpectedly with input: {}", useCaseName(), input, e);
+         LOGGER.error("Use case {} failed unexpectedly with input of type {}", useCaseName(), inputType(input), e);
          return UseCaseResult.failure(unhandledError(e));
       }
    }
@@ -180,6 +180,13 @@ public abstract class UseCase<I, O>
          ErrorCodes.VALIDATION_FAILED,
          ErrorCategory.VALIDATION,
          DESCRIPTION_PREFIX + useCaseName() + ") rejected the supplied input.");
+   }
+
+   // Inputs are described by type only: they can carry sensitive data such as passwords, and a record's
+   // toString() prints every field.
+   private static String inputType(final Object input)
+   {
+      return input == null ? "null" : input.getClass().getName();
    }
 
    private ErrorCode unhandledError(final Throwable cause)

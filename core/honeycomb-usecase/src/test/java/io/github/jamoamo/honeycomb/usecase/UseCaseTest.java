@@ -32,6 +32,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -288,6 +291,31 @@ public class UseCaseTest
          assertThrows(UseCaseException.class, () -> 
             useCase.makeExternalCall(s -> makeExceptionCall(s), "Test"));
       }
+   }
+
+   @Test
+   @DisplayName("does not log the input's value when a use case fails unexpectedly")
+   public void testUnexpectedFailureDoesNotLogInput()
+   {
+      ThrowingUseCase useCase = new ThrowingUseCase(new RuntimeException("kaboom"));
+      PrintStream originalErr = System.err;
+      ByteArrayOutputStream captured = new ByteArrayOutputStream();
+      System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
+      try
+      {
+         useCase.execute("Request[userPassword=secret-value]");
+      }
+      finally
+      {
+         System.setErr(originalErr);
+      }
+
+      String log = captured.toString(StandardCharsets.UTF_8);
+      assertThat(log)
+         .contains("ThrowingUseCase")
+         .contains("java.lang.String")
+         .contains("kaboom")
+         .doesNotContain("secret-value");
    }
 
    private String makeExceptionCall(String s) throws Exception

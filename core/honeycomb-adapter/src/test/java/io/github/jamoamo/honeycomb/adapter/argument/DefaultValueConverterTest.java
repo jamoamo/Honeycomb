@@ -115,6 +115,22 @@ public class DefaultValueConverterTest
    }
 
    @Test
+   @DisplayName("does not include the raw value in conversion failure messages")
+   public void testFailureMessagesOmitRawValue()
+   {
+      assertThatExceptionOfType(ValueConversionException.class)
+         .isThrownBy(() -> converter.convert("secret-number", int.class))
+         .satisfies(ex -> assertThat(ex.getMessage()).doesNotContain("secret-number"))
+         .satisfies(ex -> assertThat(ex).hasNoCause());
+      assertThatExceptionOfType(ValueConversionException.class)
+         .isThrownBy(() -> converter.convert("secret-bool", boolean.class))
+         .satisfies(ex -> assertThat(ex.getMessage()).doesNotContain("secret-bool"));
+      assertThatExceptionOfType(ValueConversionException.class)
+         .isThrownBy(() -> converter.convert("secret-colour", Colour.class))
+         .satisfies(ex -> assertThat(ex.getMessage()).doesNotContain("secret-colour"));
+   }
+
+   @Test
    @DisplayName("rejects unsupported target types")
    public void testRejectsUnsupportedType()
    {

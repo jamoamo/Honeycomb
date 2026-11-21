@@ -80,8 +80,9 @@ public final class DefaultValueConverter implements ValueConverter
       }
       catch (final IllegalArgumentException ex)
       {
+         // The cause is not chained: JDK parse exceptions quote the raw value, which can be sensitive.
          throw new ValueConversionException(
-            "Invalid value '" + value + "' for type " + targetType.getSimpleName(), ex);
+            "Invalid value for type " + targetType.getSimpleName() + " (" + ex.getClass().getSimpleName() + ")");
       }
 
       throw new ValueConversionException("Unsupported parameter type: " + targetType.getName());
@@ -103,7 +104,7 @@ public final class DefaultValueConverter implements ValueConverter
          return Boolean.FALSE;
       }
 
-      throw new IllegalArgumentException("Invalid boolean value: " + value);
+      throw new IllegalArgumentException("Invalid boolean value.");
    }
 
    private static Object convertEnum(final String value, final Class<?> enumType)
@@ -116,6 +117,6 @@ public final class DefaultValueConverter implements ValueConverter
          }
       }
 
-      throw new IllegalArgumentException("No enum constant: " + value);
+      throw new IllegalArgumentException("No matching enum constant.");
    }
 }

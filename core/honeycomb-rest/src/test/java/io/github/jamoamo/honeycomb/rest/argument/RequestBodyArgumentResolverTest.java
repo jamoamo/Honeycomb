@@ -30,7 +30,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Map;
@@ -88,6 +91,28 @@ public class RequestBodyArgumentResolverTest
       assertThatExceptionOfType(BadRequestException.class)
          .isThrownBy(() -> resolver.resolve(parameter(), context))
          .withMessageContaining("Malformed request body");
+   }
+
+   @Test
+   @DisplayName("does not log body values when deserialization fails")
+   public void testDeserializationFailureDoesNotLogValues()
+   {
+      PrintStream originalErr = System.err;
+      ByteArrayOutputStream captured = new ByteArrayOutputStream();
+      System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
+      try
+      {
+         assertThatExceptionOfType(BadRequestException.class)
+            .isThrownBy(() -> resolver.resolve(parameter(), context("{\"name\":\"x\",\"age\":\"secret-value\"}")));
+      }
+      finally
+      {
+         System.setErr(originalErr);
+      }
+
+      assertThat(captured.toString(StandardCharsets.UTF_8))
+         .contains("Failed to deserialize request body")
+         .doesNotContain("secret-value");
    }
 
    private static ArgumentResolutionContext context(final String body)
